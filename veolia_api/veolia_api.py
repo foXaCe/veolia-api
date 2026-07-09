@@ -28,10 +28,8 @@ from veolia_api.exceptions import (
 )
 
 from .constants import (
-    BACKEND_ISTEFR,
     CONCURRENTS_TASKS,
     GET,
-    LOGIN_CLIENT_ID,
     LOGIN_URL,
     POST,
     TIMEOUT,
@@ -39,6 +37,7 @@ from .constants import (
     ConsumptionType,
 )
 from .model import AlertSettings, VeoliaAccountData
+from .portals import get_portal
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,10 +50,23 @@ class VeoliaAPI:
         username: str,
         password: str,
         session: aiohttp.ClientSession | None = None,
+        portal_url: str | None = None,
     ) -> None:
-        """Initialize the Veolia API client"""
+        """Initialize the Veolia API client.
+
+        Args:
+            username: Veolia account email.
+            password: Veolia account password.
+            session: optional shared aiohttp session.
+            portal_url: hostname of the Veolia portal to use (see
+                ``VEOLIA_PORTALS``). Defaults to the national portal.
+
+        """
         self.username = username
         self.password = password
+        portal = get_portal(portal_url)
+        self._client_id = portal.client_id
+        self._backend_url = portal.backend_url
         self.account_data = VeoliaAccountData()
         self.session = session or aiohttp.ClientSession(timeout=TIMEOUT)
 
@@ -178,7 +190,7 @@ class VeoliaAPI:
         token_url = f"{LOGIN_URL}"
         _LOGGER.debug("Requesting access token...")
         json_payload = {
-            "ClientId": LOGIN_CLIENT_ID,
+            "ClientId": self._client_id,
             "AuthFlow": "USER_PASSWORD_AUTH",
             "AuthParameters": {"USERNAME": self.username, "PASSWORD": self.password},
         }
@@ -219,7 +231,7 @@ class VeoliaAPI:
     async def _get_client_data(self) -> None:
         """Get the account data"""
         _LOGGER.debug("Fetching user & billing data...")
-        url = f"{BACKEND_ISTEFR}/espace-client?type-front={TYPE_FRONT}"
+        url = f"{self._backend_url}/espace-client?type-front={TYPE_FRONT}"
         response = await self._send_request(url=url, method=GET)
         if response.status != HTTPStatus.OK:
             raise VeoliaAPIGetDataError(
@@ -256,7 +268,7 @@ class VeoliaAPI:
         _LOGGER.debug("OK - Fetch done for user & billing data")
 
         # Facturation request
-        url_facturation = f"{BACKEND_ISTEFR}/abonnements/{self.account_data.id_abonnement}/facturation"
+        url_facturation = f"{self._backend_url}/abonnements/{self.account_data.id_abonnement}/facturation"
         response_facturation = await self._send_request(url=url_facturation, method=GET)
         if response_facturation.status != HTTPStatus.OK:
             raise VeoliaAPIGetDataError(
@@ -322,7 +334,7 @@ class VeoliaAPI:
         else:
             raise ValueError("Invalid data type or missing month for monthly data")
 
-        url = f"{BACKEND_ISTEFR}/consommations/{self.account_data.id_abonnement}/{endpoint}"
+        url = f"{self._backend_url}/consommations/{self.account_data.id_abonnement}/{endpoint}"
 
         response = await self._send_request(
             url=url,
@@ -366,7 +378,7 @@ class VeoliaAPI:
         params = {
             "abo_id": self.account_data.id_abonnement,
         }
-        url = f"{BACKEND_ISTEFR}/alertes/{self.account_data.numero_pds}"
+        url = f"{self._backend_url}/alertes/{self.account_data.numero_pds}"
         response = await self._send_request(
             url=url,
             method=GET,
@@ -428,7 +440,7 @@ class VeoliaAPI:
     async def _get_mensualisation_plan(self) -> dict:
         """Get the plan de mensualisation for the given abonnement ID"""
         _LOGGER.debug("Getting mensualisation plan...")
-        url = f"{BACKEND_ISTEFR}/abonnements/{self.account_data.id_abonnement}/facturation/mensualisation/plan"
+        url = f"{self._backend_url}/abonnements/{self.account_data.id_abonnement}/facturation/mensualisation/plan"
 
         response = await self._send_request(url=url, method=GET)
 
@@ -508,7 +520,7 @@ class VeoliaAPI:
         await self._check_token()
 
         _LOGGER.debug("Setting alerts params...")
-        url = f"{BACKEND_ISTEFR}/alertes/{self.account_data.numero_pds}"
+        url = f"{self._backend_url}/alertes/{self.account_data.numero_pds}"
         payload = {}
 
         if alert_settings.daily_enabled:

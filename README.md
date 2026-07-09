@@ -73,6 +73,27 @@ if __name__ == "__main__":
 
 You can use usage_example.py
 
+### Portals
+
+Veolia operates several portals. They share the same Cognito authentication flow
+but each has its own `client_id`, and some run on a dedicated data backend. Select
+a portal with the `portal_url` argument (defaults to the national portal):
+
+```python
+client_api = VeoliaAPI("your@email.com", "password", session, portal_url="www.ea-pm.fr")
+```
+
+| `portal_url`                      | Description                             | Backend  |
+| --------------------------------- | --------------------------------------- | -------- |
+| `eau.veolia.fr` (default)         | Veolia France (national)                | default  |
+| `eaudetm.monespace.eau.veolia.fr` | Eau de Toulouse Métropole               | default  |
+| `www.ea-pm.fr`                    | Eau de Perpignan Méditerranée Métropole | dedicated |
+
+To add a portal, add an entry to `VEOLIA_PORTALS` in
+[`veolia_api/portals.py`](veolia_api/portals.py) with its `client_id` (found in
+the portal's JavaScript bundle as `ClientId:"..."`) and, if different from the
+default, its `backend_url`.
+
 ## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on reporting bugs, suggesting features, and submitting pull requests.
