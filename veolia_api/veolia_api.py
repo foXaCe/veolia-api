@@ -8,7 +8,7 @@ import logging
 import re
 from datetime import UTC, date, datetime, timedelta
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import aiohttp
 from tenacity import (
@@ -44,6 +44,29 @@ if TYPE_CHECKING:
     from collections.abc import Coroutine, Iterator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Keys whose values are personal account identifiers or credentials.
+_REDACTED_KEYS: Final = frozenset(
+    {
+        "password",
+        "contact_id",
+        "tiers_id",
+        "numero_compteur",
+        "numero_pds",
+        "numero-pds",
+        "abo_id",
+        "numero_client",
+        "titulaire",
+    },
+)
+
+
+def _redact(mapping: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``mapping`` with sensitive keys redacted."""
+    return {
+        key: "REDACTED" if key.lower() in _REDACTED_KEYS else value
+        for key, value in mapping.items()
+    }
 
 
 class VeoliaAPI:
@@ -110,9 +133,7 @@ class VeoliaAPI:
         The Cognito login payload carries the password in ``AuthParameters``;
         headers carry the bearer token.
         """
-        safe_params = {**params} if params else {}
-        if "password" in safe_params:
-            safe_params["password"] = "REDACTED"
+        safe_params = _redact(params) if params else {}
 
         safe_headers = {**headers}
         if "Authorization" in safe_headers:
@@ -120,13 +141,10 @@ class VeoliaAPI:
 
         safe_json = None
         if json_data is not None:
-            safe_json = {**json_data}
+            safe_json = _redact(json_data)
             auth_params = safe_json.get("AuthParameters")
             if isinstance(auth_params, dict) and "PASSWORD" in auth_params:
                 safe_json["AuthParameters"] = {**auth_params, "PASSWORD": "REDACTED"}
-            for key in list(safe_json):
-                if key.lower() == "password":
-                    safe_json[key] = "REDACTED"
 
         _LOGGER.debug(
             "Making %s request to %s with params: %s, headers: %s, json: %s",
@@ -666,8 +684,6 @@ class VeoliaAPI:
                 "type_front": TYPE_FRONT,
             },
         )
-
-        _LOGGER.debug("Alert settings payload: %s", payload)
 
         response = await self._send_request(url=url, method=POST, json_data=payload)
         if response.status != HTTPStatus.NO_CONTENT:

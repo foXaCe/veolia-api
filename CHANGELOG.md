@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer supported).
 - Token refresh no longer re-fetches account/billing data on every expiry;
   only the Cognito authentication is repeated once the account is known.
+- Debug logs now redact account identifiers (`numero_pds`, `contact_id`,
+  `tiers_id`, `numero_compteur`, `abo_id`, `numero_client`, `titulaire`) in
+  addition to the password and bearer token.
 
 ### Fixed
 
