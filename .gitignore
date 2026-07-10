@@ -1,9 +1,37 @@
-/debug_api.py
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+veolia_api/__pycache__/
+
+# Testing / coverage
+.pytest_cache/
+.pytest*
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Linters / type checkers
+.ruff_cache/
+.mypy_cache/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Environments
 .env
+.venv/
+env/
+/.pypirc
+
+# IDE
 .idea
 .vscode
-/.pypirc
-veolia_api/__pycache__/
-__pycache__
-.pytest*
-.venv/
+
+# Local / scratch
+/debug_api.py

@@ -8,6 +8,11 @@
     ":disableDependencyDashboard"
   ],
   "ignoreUnstable": true,
+  "labels": ["dependencies"],
+  "vulnerabilityAlerts": {
+    "labels": ["security", "dependencies"],
+    "schedule": ["at any time"]
+  },
   "packageRules": [
     {
       "automerge": false,
