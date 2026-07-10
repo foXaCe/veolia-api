@@ -1,16 +1,15 @@
 {
   "packages": [
-    "python@3.10",
-    "python@latest"
+    "python@3.11"
   ],
   "shell": {
     "init_hook": [
       ". $VENV_DIR/bin/activate",
-      "pip install -r requirements.txt",
-      "pip install veolia-api"
+      "pip install -r requirements.txt -r requirements_test.txt",
+      "pip install -e ."
     ],
     "scripts": {
-      "run_test": "python main.py"
+      "run_test": "python -m pytest"
     }
   }
 }
