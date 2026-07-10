@@ -123,3 +123,21 @@ async def test_fetch_all_data_aggregates(logged_in_api, mock_session):
     assert data.alert_settings.daily_enabled is False
     assert len(mock_session.calls_matching("mensuelles")) == 2
     assert len(mock_session.calls_matching("journalieres")) == 4
+
+
+async def test_fetch_all_data_stores_mensualisation_plan(logged_in_api, mock_session):
+    mock_session.add("GET", MENSUELLES_URL, payload=[{"m": 1}], repeat=True)
+    mock_session.add("GET", JOURNALIERES_URL, payload=[{"d": 1}], repeat=True)
+    mock_session.add("GET", ALERTES_URL, status=204, repeat=True)
+    mock_session.add(
+        "GET",
+        PLAN_URL,
+        payload={"prelevements_echeancier": [{"montant": 42}]},
+        repeat=True,
+    )
+
+    await logged_in_api.fetch_all_data(date(2025, 1, 1), date(2025, 1, 1))
+
+    assert logged_in_api.account_data.billing_plan == {
+        "prelevements_echeancier": [{"montant": 42}],
+    }

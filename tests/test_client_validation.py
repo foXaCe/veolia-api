@@ -57,3 +57,9 @@ async def test_close_closes_owned_session():
     session = api.session  # triggers lazy creation inside the running loop
     await api.close()
     assert session.closed
+
+
+async def test_close_does_not_close_injected_session(mock_session):
+    api = VeoliaAPI("alice@example.test", "pw", session=mock_session)
+    await api.close()
+    assert mock_session.closed is False
