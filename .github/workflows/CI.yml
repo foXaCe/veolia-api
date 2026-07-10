@@ -31,6 +31,26 @@ jobs:
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
 
+  typecheck:
+    name: Typecheck (mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install project and mypy
+        run: |
+          python -m pip install --upgrade pip
+          pip install . mypy
+
+      - name: Run mypy
+        run: mypy veolia_api
+
   test:
     name: Test (py${{ matrix.python-version }})
     runs-on: ubuntu-latest

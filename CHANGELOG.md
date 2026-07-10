@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dependency review), stale-issue management, and a real `pytest` test suite.
 - New exception `VeoliaAPIConnectionError` raised for network-level failures
   (connection errors, timeouts).
+- Strict mypy typechecking (`[tool.mypy]` config + CI job).
 
 ### Changed
 

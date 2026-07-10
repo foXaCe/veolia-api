@@ -9,6 +9,11 @@ keep = []
 [tool.codespell]
 ignore-words-list = "aaa"
 
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["veolia_api"]
+
 [tool.ruff]
 target-version = "py311"
 exclude = ["setup.py", "usage_example.py"]
@@ -166,6 +171,7 @@ pre-commit = "^4.0.1"
 black = "^26.0.0"
 ruff = "^0.15.0"
 python-dotenv = ">=1.0.0"
+mypy = "^1.14"
 
 [tool.tox]
 envlist = ["pre-commit"]

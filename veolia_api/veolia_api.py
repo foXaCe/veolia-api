@@ -371,7 +371,10 @@ class VeoliaAPI:
             )
         abonnement = abonnements[0]
 
-        self.account_data.id_abonnement = abonnement.get("id_abonnement")
+        raw_id_abonnement = abonnement.get("id_abonnement")
+        self.account_data.id_abonnement = (
+            str(raw_id_abonnement) if raw_id_abonnement is not None else None
+        )
         self.account_data.tiers_id = tiers.get("id")
         self.account_data.contact_id = contact.get("id_contact")
         self.account_data.numero_compteur = abonnement.get("numero_compteur")
@@ -680,7 +683,7 @@ class VeoliaAPI:
                 "contact_id": self.account_data.contact_id,
                 "numero_compteur": self.account_data.numero_compteur,
                 "tiers_id": self.account_data.tiers_id,
-                "abo_id": str(self.account_data.id_abonnement),
+                "abo_id": self.account_data.id_abonnement,
                 "type_front": TYPE_FRONT,
             },
         )
