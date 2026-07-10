@@ -15,6 +15,10 @@ class VeoliaAPITokenError(VeoliaAPIError):
     """Exception for access-token retrieval or validation failures."""
 
 
+class VeoliaAPIConnectionError(VeoliaAPIError):
+    """Exception for network-level failures (connection errors, timeouts)."""
+
+
 class VeoliaAPIResponseError(VeoliaAPIError):
     """Exception for unexpected API response payloads."""
 

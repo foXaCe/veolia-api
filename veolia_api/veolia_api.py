@@ -30,6 +30,7 @@ from .constants import (
     ConsumptionType,
 )
 from .exceptions import (
+    VeoliaAPIConnectionError,
     VeoliaAPIGetDataError,
     VeoliaAPIInvalidCredentialsError,
     VeoliaAPIRateLimitError,
@@ -122,13 +123,35 @@ class VeoliaAPI:
             safe_json,
         )
 
+    async def _send_request(
+        self,
+        url: str,
+        method: str,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+        is_login: bool = False,
+    ) -> aiohttp.ClientResponse:
+        """Send a request, translating network failures to VeoliaAPIConnectionError."""
+        try:
+            return await self._send_request_with_retry(
+                url=url,
+                method=method,
+                params=params,
+                json_data=json_data,
+                is_login=is_login,
+            )
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise VeoliaAPIConnectionError(
+                f"Network error calling {url}: {err}",
+            ) from err
+
     @retry(
         reraise=True,
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1, min=1, max=16),
         retry=retry_if_exception_type((aiohttp.ClientError, VeoliaAPIRateLimitError)),
     )
-    async def _send_request(
+    async def _send_request_with_retry(
         self,
         url: str,
         method: str,

@@ -9,6 +9,7 @@ from veolia_api import exceptions
 _SUBCLASSES = [
     "VeoliaAPIInvalidCredentialsError",
     "VeoliaAPITokenError",
+    "VeoliaAPIConnectionError",
     "VeoliaAPIResponseError",
     "VeoliaAPIGetDataError",
     "VeoliaAPISetDataError",

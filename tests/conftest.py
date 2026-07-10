@@ -128,7 +128,7 @@ class MockSession:
 @pytest.fixture
 def no_retry_wait():
     """Disable the exponential backoff between tenacity retries."""
-    retrying = VeoliaAPI._send_request.retry
+    retrying = VeoliaAPI._send_request_with_retry.retry
     original = retrying.wait
     retrying.wait = tenacity.wait_none()
     yield

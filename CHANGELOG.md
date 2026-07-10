@@ -13,11 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.gitattributes`, issue/PR templates.
 - CI: CodeQL analysis, daily security audit (pip-audit, OSV-Scanner, Gitleaks,
   dependency review), stale-issue management, and a real `pytest` test suite.
+- New exception `VeoliaAPIConnectionError` raised for network-level failures
+  (connection errors, timeouts).
 
 ### Changed
 
 - `CODEOWNERS` now points to the fork maintainer (`@foXaCe`).
 - CI actions bumped (`actions/checkout` v7, `actions/cache` v6).
+- Raw `aiohttp.ClientError` / `TimeoutError` no longer escape the client; they
+  are wrapped in `VeoliaAPIConnectionError` (the original exception is kept as
+  `__cause__`).
 
 ### Fixed
 

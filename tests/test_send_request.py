@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import aiohttp
 import pytest
 
 from tests.conftest import COGNITO_OK, ESPACE_CLIENT_OK, FACTURATION_OK
+from veolia_api import VeoliaAPI
 from veolia_api.exceptions import (
+    VeoliaAPIConnectionError,
     VeoliaAPIGetDataError,
     VeoliaAPIRateLimitError,
     VeoliaAPITokenError,
@@ -14,6 +17,20 @@ from veolia_api.exceptions import (
 COGNITO_URL = r"cognito-idp\.eu-west-3\.amazonaws\.com"
 ESPACE_CLIENT_URL = r"/espace-client"
 FACTURATION_URL = r"/facturation$"
+
+
+class RaisingSession:
+    """Session stand-in whose request() always raises the given exception."""
+
+    closed = False
+
+    def __init__(self, exc):
+        self._exc = exc
+        self.calls = 0
+
+    async def request(self, method, url, **kwargs):  # noqa: ARG002
+        self.calls += 1
+        raise self._exc
 
 
 @pytest.mark.usefixtures("no_retry_wait")
@@ -109,3 +126,36 @@ async def test_mensualisation_plan_failure_response_is_released(
 
     assert result == {}
     assert mock_session.served[0].released is True
+
+
+@pytest.mark.usefixtures("no_retry_wait")
+async def test_client_error_wrapped_after_retries():
+    session = RaisingSession(aiohttp.ClientConnectionError("boom"))
+    api = VeoliaAPI("alice@example.test", "pw", session=session)
+
+    with pytest.raises(VeoliaAPIConnectionError) as err:
+        await api._send_request(url="https://x.test", method="GET")
+
+    assert session.calls == 5
+    assert isinstance(err.value.__cause__, aiohttp.ClientConnectionError)
+
+
+async def test_timeout_wrapped_without_retry():
+    session = RaisingSession(TimeoutError())
+    api = VeoliaAPI("alice@example.test", "pw", session=session)
+
+    with pytest.raises(VeoliaAPIConnectionError) as err:
+        await api._send_request(url="https://x.test", method="GET")
+
+    assert session.calls == 1
+    assert isinstance(err.value.__cause__, TimeoutError)
+
+
+@pytest.mark.usefixtures("no_retry_wait")
+async def test_rate_limit_error_not_wrapped(logged_in_api, mock_session):
+    mock_session.add("GET", ESPACE_CLIENT_URL, status=429, repeat=True)
+
+    with pytest.raises(VeoliaAPIRateLimitError) as err:
+        await logged_in_api._get_client_data()
+
+    assert type(err.value) is VeoliaAPIRateLimitError
