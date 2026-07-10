@@ -38,8 +38,6 @@ class VeoliaAccountData:
 
     access_token: str | None = None
     token_expiration: float = 0
-    code: str | None = None
-    verifier: str | None = None
     id_abonnement: str | None = None
     numero_pds: str | None = None
     contact_id: str | None = None

@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructed outside async code without an injected session; the session is
   created lazily on first request.
 
+### Removed
+
+- Dead code from the pre-Cognito flow: `VeoliaAccountData.code`/`.verifier`,
+  `CALLBACK_ENDPOINT`, `VeoliaAPIUnknownError`, and the unreachable
+  POST-with-form-params branch in the request helper.
+
 ## [2.3.0] - 2026-07-10
 
 ### Added

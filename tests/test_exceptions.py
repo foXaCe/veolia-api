@@ -13,7 +13,6 @@ _SUBCLASSES = [
     "VeoliaAPIResponseError",
     "VeoliaAPIGetDataError",
     "VeoliaAPISetDataError",
-    "VeoliaAPIUnknownError",
     "VeoliaAPIRateLimitError",
 ]
 

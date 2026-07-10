@@ -31,9 +31,5 @@ class VeoliaAPISetDataError(VeoliaAPIError):
     """Exception for data-writing failures."""
 
 
-class VeoliaAPIUnknownError(VeoliaAPIError):
-    """Exception for unknown Veolia API errors."""
-
-
 class VeoliaAPIRateLimitError(VeoliaAPIError):
     """Exception for HTTP 429 Too Many Requests."""

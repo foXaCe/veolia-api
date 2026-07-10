@@ -17,9 +17,6 @@ BACKEND_ISTEFR: Final = DEFAULT_BACKEND_URL
 # AUTH — default Cognito client id (national portal), for backward compatibility.
 LOGIN_CLIENT_ID: Final = VEOLIA_PORTALS[DEFAULT_PORTAL_URL].client_id
 
-# API Flow Endpoints
-CALLBACK_ENDPOINT: Final = "/callback"
-
 TYPE_FRONT: Final = "WEB_ORDINATEUR"
 
 # HTTP Methods

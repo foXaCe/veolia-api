@@ -9,7 +9,6 @@ import re
 from datetime import UTC, date, datetime, timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import urlencode
 
 import aiohttp
 from tenacity import (
@@ -212,15 +211,6 @@ class VeoliaAPI:
             req_headers["x-amz-target"] = (
                 "AWSCognitoIdentityProviderService.InitiateAuth"
             )
-
-        elif method.upper() == POST and params:
-            req_headers.update(
-                {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Cache-Control": "no-cache",
-                },
-            )
-            kwargs["data"] = urlencode(params)
 
         response = await self.session.request(method.upper(), url, **kwargs)
         _LOGGER.debug("Received response with status code %s", response.status)
