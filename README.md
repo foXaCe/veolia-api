@@ -3,10 +3,10 @@
 </p>
 
 <p>
-    <a href="https://pypi.org/project/veolia-api/"><img src="https://img.shields.io/pypi/v/veolia-api.svg"/></a>
+    <a href="https://pypi.org/project/veolia-api-foxace/"><img src="https://img.shields.io/pypi/v/veolia-api-foxace.svg"/></a>
     <a href="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white"><img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white" /></a>
     <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000.svg" /></a>
-    <a href="https://github.com/Jezza34000/veolia-api/actions"><img src="https://github.com/Jezza34000/veolia-api/workflows/CI/badge.svg"/></a>
+    <a href="https://github.com/foXaCe/veolia-api/actions"><img src="https://github.com/foXaCe/veolia-api/workflows/CI/badge.svg"/></a>
 </p>
 
 Async Python client for the Veolia water portal API (`eau.veolia.fr`).
@@ -36,7 +36,7 @@ That's it !
 If you already have a python environment just run
 
 ```bash
-pip install veolia-api
+pip install veolia-api-foxace
 ```
 
 ## Usage

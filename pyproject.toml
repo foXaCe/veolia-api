@@ -124,15 +124,17 @@ requires = ["poetry-core>=2.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "veolia_api"
+name = "veolia-api-foxace"
 version = "2.2.3"
-description = "Client API for eau.veolia.fr"
+description = "Async client for the Veolia water portals (eau.veolia.fr and delegated portals)"
 authors = ["Jezza34000 <info@mail.com>"]
+maintainers = ["foXaCe"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/Jezza34000/veolia-api"
-repository = "https://github.com/Jezza34000/veolia-api"
+homepage = "https://github.com/foXaCe/veolia-api"
+repository = "https://github.com/foXaCe/veolia-api"
 keywords = ["python", "veolia"]
+packages = [{ include = "veolia_api" }]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",

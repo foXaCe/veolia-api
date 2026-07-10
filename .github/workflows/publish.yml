@@ -1,17 +1,20 @@
-name: Publish Python Package (PyPi)
+name: Publish Python Package (PyPI)
 
 on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    permissions:
+      # Required for PyPI trusted publishing (OIDC).
+      id-token: write
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: main
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -21,8 +24,8 @@ jobs:
       - name: Install Poetry
         run: pip install --no-input poetry
 
-      - name: Build and publish to PyPi
-        env:
-          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          poetry publish --build
+      - name: Build package
+        run: poetry build
+
+      - name: Publish to PyPI (trusted publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
