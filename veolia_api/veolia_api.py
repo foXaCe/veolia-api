@@ -344,7 +344,7 @@ class VeoliaAPI:
         ).timestamp()
         _LOGGER.debug("OK - Access token retrieved")
 
-    async def _get_client_data(self) -> None:  # noqa: PLR0915
+    async def _get_client_data(self) -> None:
         """Get the account data."""
         _LOGGER.debug("Fetching user & billing data...")
         url = f"{self._backend_url}/espace-client?type-front={TYPE_FRONT}"
@@ -356,6 +356,24 @@ class VeoliaAPI:
             )
 
         userdata = await response.json()
+        self._parse_espace_client(userdata)
+        _LOGGER.debug("OK - Fetch done for user & billing data")
+
+        # Facturation request
+        url_facturation = f"{self._backend_url}/abonnements/{self.account_data.id_abonnement}/facturation"
+        response_facturation = await self._send_request(url=url_facturation, method=GET)
+        if response_facturation.status != HTTPStatus.OK:
+            response_facturation.release()
+            raise VeoliaAPIGetDataError(
+                f"call to= facturation failed with http status= {response_facturation.status}",
+            )
+
+        facturation_data = await response_facturation.json()
+        self._parse_facturation(facturation_data)
+        _LOGGER.debug("OK - Billing data received")
+
+    def _parse_espace_client(self, userdata: dict[str, Any]) -> None:
+        """Extract subscription identifiers and contract details."""
         contacts = userdata.get("contacts") or []
         if not contacts:
             raise VeoliaAPIResponseError("No contact found in espace-client response")
@@ -393,18 +411,9 @@ class VeoliaAPI:
         self.account_data.emplacement_compteur = abonnement.get("emplacement_compteur")
         self.account_data.libelle_contrat = abonnement.get("libelle_contrat")
         self.account_data.statut = abonnement.get("statut")
-        _LOGGER.debug("OK - Fetch done for user & billing data")
 
-        # Facturation request
-        url_facturation = f"{self._backend_url}/abonnements/{self.account_data.id_abonnement}/facturation"
-        response_facturation = await self._send_request(url=url_facturation, method=GET)
-        if response_facturation.status != HTTPStatus.OK:
-            response_facturation.release()
-            raise VeoliaAPIGetDataError(
-                f"call to= facturation failed with http status= {response_facturation.status}",
-            )
-
-        facturation_data = await response_facturation.json()
+    def _parse_facturation(self, facturation_data: dict[str, Any]) -> None:
+        """Extract billing fields and required billing identifiers."""
         self.account_data.numero_pds = facturation_data.get("numero_pds")
         self.account_data.solde = facturation_data.get("solde")
         self.account_data.dernier_index_releve = facturation_data.get(
@@ -426,7 +435,6 @@ class VeoliaAPI:
             raise VeoliaAPIResponseError(
                 "date_debut_abonnement not found in the response",
             )
-        _LOGGER.debug("OK - Billing data received")
 
     async def _get_consumption_data(
         self,
