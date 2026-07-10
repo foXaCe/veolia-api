@@ -5,9 +5,20 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release-drafter-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   update_release_draft:
     runs-on: ubuntu-latest
+    permissions:
+      # release-drafter needs to write the draft release and read PRs.
+      contents: write
+      pull-requests: write
     steps:
       - name: Update release draft
         uses: release-drafter/release-drafter@v7

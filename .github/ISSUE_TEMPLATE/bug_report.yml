@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a bug in veolia-api
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for taking the time to report a bug. **Never paste your Veolia
+        password or access token** — redact them from any log you share.
+
+  - type: input
+    id: version
+    attributes:
+      label: veolia-api version
+      placeholder: e.g. 2.3.0
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: e.g. 3.13
+    validations:
+      required: true
+
+  - type: dropdown
+    id: portal
+    attributes:
+      label: Portal
+      options:
+        - eau.veolia.fr (national)
+        - eaudetm.monespace.eau.veolia.fr (Toulouse Métropole)
+        - www.ea-pm.fr (Perpignan Méditerranée Métropole)
+        - Other or unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Debug logs with credentials redacted.
+      render: shell
