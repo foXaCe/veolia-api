@@ -125,7 +125,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "veolia-api-foxace"
-version = "2.2.3"
+version = "2.3.0"
 description = "Async client for the Veolia water portals (eau.veolia.fr and delegated portals)"
 authors = ["Jezza34000 <info@mail.com>"]
 maintainers = ["foXaCe"]
