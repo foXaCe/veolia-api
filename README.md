@@ -101,3 +101,8 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for gu
 ## Credits
 
 This repository is inspired by the work done by @CorentinGrard. Thanks to him for his work.
+It is a fork of [`Jezza34000/veolia-api`](https://github.com/Jezza34000/veolia-api).
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
