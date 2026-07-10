@@ -130,3 +130,24 @@ async def test_check_token_expired_triggers_login(logged_in_api, mock_session):
     await logged_in_api._check_token()
 
     assert len(mock_session.calls_matching("cognito-idp")) == 1
+
+
+async def test_expired_token_with_discovered_account_refreshes_token_only(
+    logged_in_api,
+    mock_session,
+):
+    logged_in_api.account_data.token_expiration = datetime.now(UTC).timestamp() - 10
+    mock_session.add("POST", COGNITO_URL, payload=COGNITO_OK)
+
+    await logged_in_api._check_token()
+
+    assert logged_in_api.account_data.access_token == "test-token"
+    assert len(mock_session.requests) == 1
+
+
+async def test_expired_token_without_discovery_does_full_login(api, mock_session):
+    add_login_mocks(mock_session)
+
+    await api._check_token()
+
+    assert api.account_data.numero_pds == "PDS1"

@@ -267,13 +267,25 @@ class VeoliaAPI:
         return False
 
     async def _check_token(self) -> None:
-        """Check if the access token is still valid, re-login otherwise."""
+        """Ensure a valid access token, re-authenticating if needed.
+
+        When the account has already been discovered, only the Cognito token
+        is refreshed; the full login (with account discovery) runs otherwise.
+        """
         if (
-            not self.account_data.access_token
-            or datetime.now(UTC).timestamp()
-            >= self.account_data.token_expiration - TOKEN_EXPIRY_MARGIN
+            self.account_data.access_token
+            and datetime.now(UTC).timestamp()
+            < self.account_data.token_expiration - TOKEN_EXPIRY_MARGIN
         ):
-            _LOGGER.debug("No access token or token expired")
+            return
+        _LOGGER.debug("No access token or token expired")
+        if (
+            self.account_data.id_abonnement
+            and self.account_data.numero_pds
+            and self.account_data.date_debut_abonnement
+        ):
+            await self._get_access_token()
+        else:
             await self.login()
 
     async def _get_access_token(self) -> None:

@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `__cause__`).
 - `VeoliaAPI.session` is now a read-only property (assigning to it is no
   longer supported).
+- Token refresh no longer re-fetches account/billing data on every expiry;
+  only the Cognito authentication is repeated once the account is known.
 
 ### Fixed
 
