@@ -13,6 +13,8 @@ LOGIN_URL: Final = "https://cognito-idp.eu-west-3.amazonaws.com"
 # Default data backend (national portal). Kept for backward compatibility;
 # the effective backend is resolved per portal (see portals.py).
 BACKEND_ISTEFR: Final = DEFAULT_BACKEND_URL
+# Public commune-reference API (portal discovery). See plans/011 spike report.
+REFCOMMUNES_URL: Final = "https://prd-ael-sirius-refcommunes.istefr.fr"
 
 # AUTH — default Cognito client id (national portal), for backward compatibility.
 LOGIN_CLIENT_ID: Final = VEOLIA_PORTALS[DEFAULT_PORTAL_URL].client_id

@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New exception `VeoliaAPIConnectionError` raised for network-level failures
   (connection errors, timeouts).
 - Strict mypy typechecking (`[tool.mypy]` config + CI job).
+- `resolve_portal_url(commune)`: resolve a commune name to its portal
+  hostname via Veolia's public commune-reference API (see the plan-011
+  spike report).
 
 ### Changed
 

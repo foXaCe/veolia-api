@@ -89,6 +89,15 @@ client_api = VeoliaAPI("your@email.com", "password", session, portal_url="www.ea
 | `eaudetm.monespace.eau.veolia.fr` | Eau de Toulouse Métropole               | default  |
 | `www.ea-pm.fr`                    | Eau de Perpignan Méditerranée Métropole | dedicated |
 
+You can resolve a commune name to its portal at setup time:
+
+```python
+from veolia_api import resolve_portal_url
+
+portal = await resolve_portal_url("Toulouse")   # "eaudetm.monespace.eau.veolia.fr"
+client_api = VeoliaAPI("your@email.com", "password", session, portal_url=portal)
+```
+
 To add a portal, add an entry to `VEOLIA_PORTALS` in
 [`veolia_api/portals.py`](veolia_api/portals.py) with its `client_id` (found in
 the portal's JavaScript bundle as `ClientId:"..."`) and, if different from the
