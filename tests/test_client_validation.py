@@ -63,3 +63,15 @@ async def test_close_does_not_close_injected_session(mock_session):
     api = VeoliaAPI("alice@example.test", "pw", session=mock_session)
     await api.close()
     assert mock_session.closed is False
+
+
+async def test_close_then_reuse_creates_fresh_session():
+    api = VeoliaAPI("alice@example.test", "pw")
+    api.session  # noqa: B018 - triggers lazy creation inside the running loop
+    await api.close()
+    assert api._session is None
+
+    new_session = api.session  # triggers a fresh lazy creation
+    assert new_session.closed is False
+
+    await api.close()

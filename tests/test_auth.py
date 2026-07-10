@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import Mock
 
+import aiohttp
 import pytest
 
 from tests.conftest import COGNITO_OK, ESPACE_CLIENT_OK, FACTURATION_OK
@@ -81,6 +83,26 @@ async def test_login_other_cognito_error_raises_token_error(api, mock_session):
 
     with pytest.raises(VeoliaAPITokenError):
         await api.login()
+
+
+async def test_token_empty_body_raises_token_error(api, mock_session):
+    mock_session.add("POST", COGNITO_URL, status=502, payload=None)
+
+    with pytest.raises(VeoliaAPITokenError):
+        await api._get_access_token()
+
+
+async def test_token_non_json_body_raises_token_error(api, mock_session):
+    mock_session.add(
+        "POST",
+        COGNITO_URL,
+        json_exc=aiohttp.ContentTypeError(request_info=Mock(), history=()),
+    )
+
+    with pytest.raises(VeoliaAPITokenError):
+        await api._get_access_token()
+
+    assert mock_session.served[-1].released is True
 
 
 async def test_login_missing_authentication_result_raises(api, mock_session):
