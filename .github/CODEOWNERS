@@ -1,1 +1,8 @@
-*   @Jezza34000
+# Default owner for everything in the repo
+*                       @foXaCe
+
+# Package source
+/veolia_api/            @foXaCe
+
+# CI / repo tooling
+/.github/               @foXaCe

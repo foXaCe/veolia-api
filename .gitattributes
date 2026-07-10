@@ -1,0 +1,22 @@
+# Normalize line endings to LF on checkin
+* text=auto eol=lf
+
+# Explicitly declare text files
+*.py    text
+*.toml  text
+*.md    text
+*.yml   text
+*.yaml  text
+*.json  text
+*.cfg   text
+*.txt   text
+
+# Keep shell scripts LF
+*.sh    text eol=lf
+
+# Binaries (no diff, no line-ending munging)
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.ico   binary
+*.zip   binary
