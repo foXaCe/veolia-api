@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Raw `aiohttp.ClientError` / `TimeoutError` no longer escape the client; they
   are wrapped in `VeoliaAPIConnectionError` (the original exception is kept as
   `__cause__`).
+- `VeoliaAPI.session` is now a read-only property (assigning to it is no
+  longer supported).
 
 ### Fixed
 
@@ -35,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   immediately expired (defaults to 1 hour, with a warning).
 - HTTP responses are now released on every error path (429 retries, 401,
   non-OK statuses), preventing pooled-connection leaks in shared sessions.
+- `VeoliaAPI(...)` no longer raises `RuntimeError: no running event loop` when
+  constructed outside async code without an injected session; the session is
+  created lazily on first request.
 
 ## [2.3.0] - 2026-07-10
 

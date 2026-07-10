@@ -40,8 +40,20 @@ async def test_login_invalid_email_raises():
         await api.close()
 
 
+def test_constructor_works_outside_event_loop():
+    api = VeoliaAPI("alice@example.test", "pw")
+    assert api._session is None
+
+
 async def test_close_is_idempotent():
     api = VeoliaAPI("alice@example.test", "pw")
     await api.close()
     await api.close()
-    assert api.session.closed
+    assert api._session is None
+
+
+async def test_close_closes_owned_session():
+    api = VeoliaAPI("alice@example.test", "pw")
+    session = api.session  # triggers lazy creation inside the running loop
+    await api.close()
+    assert session.closed

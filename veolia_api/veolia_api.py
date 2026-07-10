@@ -74,14 +74,29 @@ class VeoliaAPI:
         self._backend_url = portal.backend_url
         self.account_data = VeoliaAccountData()
         self._owns_session = session is None
-        self.session = session or aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=TIMEOUT),
-        )
+        self._session: aiohttp.ClientSession | None = session
+
+    @property
+    def session(self) -> aiohttp.ClientSession:
+        """The aiohttp session, created lazily on first use.
+
+        Lazy creation means the constructor works outside a running event
+        loop; the session is only built inside a coroutine.
+        """
+        if self._session is None:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=TIMEOUT),
+            )
+        return self._session
 
     async def close(self) -> None:
         """Release the HTTP session if this client owns it."""
-        if self._owns_session and not self.session.closed:
-            await self.session.close()
+        if (
+            self._owns_session
+            and self._session is not None
+            and not self._session.closed
+        ):
+            await self._session.close()
 
     @staticmethod
     def _log_request(
