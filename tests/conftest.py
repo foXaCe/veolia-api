@@ -64,15 +64,18 @@ ALERTS_OK = {
 class MockResponse:
     """Minimal stand-in for aiohttp.ClientResponse."""
 
-    def __init__(self, status=200, payload=None):
+    def __init__(self, status=200, payload=None, json_exc=None):
         self.status = status
         self._payload = payload
+        self._json_exc = json_exc
         self.released = False
 
     def release(self):
         self.released = True
 
     async def json(self, content_type=None):  # noqa: ARG002
+        if self._json_exc is not None:
+            raise self._json_exc
         return self._payload
 
 
@@ -90,7 +93,15 @@ class MockSession:
         self.served = []
         self.closed = False
 
-    def add(self, method, url_pattern, status=200, payload=None, repeat=False):
+    def add(  # noqa: PLR0913
+        self,
+        method,
+        url_pattern,
+        status=200,
+        payload=None,
+        repeat=False,
+        json_exc=None,
+    ):
         self._routes.append(
             {
                 "method": method.upper(),
@@ -99,6 +110,7 @@ class MockSession:
                 "payload": payload,
                 "repeat": repeat,
                 "used": False,
+                "json_exc": json_exc,
             },
         )
 
@@ -112,7 +124,11 @@ class MockSession:
             if route["used"] and not route["repeat"]:
                 continue
             route["used"] = True
-            response = MockResponse(status=route["status"], payload=route["payload"])
+            response = MockResponse(
+                status=route["status"],
+                payload=route["payload"],
+                json_exc=route["json_exc"],
+            )
             self.served.append(response)
             return response
         raise AssertionError(f"Unexpected request: {method} {url}")

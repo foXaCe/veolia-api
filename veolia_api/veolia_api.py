@@ -117,13 +117,19 @@ class VeoliaAPI:
         return self._session
 
     async def close(self) -> None:
-        """Release the HTTP session if this client owns it."""
+        """Release the HTTP session if this client owns it.
+
+        Resets the session reference so a closed client can be reused: the
+        next request lazily creates a fresh session.
+        """
         if (
             self._owns_session
             and self._session is not None
             and not self._session.closed
         ):
             await self._session.close()
+        if self._owns_session:
+            self._session = None
 
     @staticmethod
     def _log_request(
@@ -323,7 +329,19 @@ class VeoliaAPI:
             login_json=json_payload,
         )
 
-        token_data = await response.json(content_type="json")
+        try:
+            token_data = await response.json(content_type="json")
+        except (aiohttp.ContentTypeError, ValueError) as err:
+            response.release()
+            raise VeoliaAPITokenError(
+                f"Unexpected Cognito response (HTTP {response.status})",
+            ) from err
+
+        if not isinstance(token_data, dict):
+            # Empty body: aiohttp's json() returns None instead of raising.
+            raise VeoliaAPITokenError(
+                f"Empty Cognito response (HTTP {response.status})",
+            )
 
         if response.status != HTTPStatus.OK:
             error_type = token_data.get("__type", "")
