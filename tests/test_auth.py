@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from unittest.mock import Mock
 
@@ -173,3 +174,17 @@ async def test_expired_token_without_discovery_does_full_login(api, mock_session
     await api._check_token()
 
     assert api.account_data.numero_pds == "PDS1"
+
+
+async def test_concurrent_check_token_single_login(logged_in_api, mock_session):
+    logged_in_api.account_data.token_expiration = datetime.now(UTC).timestamp() - 10
+    mock_session.add("POST", COGNITO_URL, payload=COGNITO_OK, repeat=True)
+
+    await asyncio.gather(
+        logged_in_api._check_token(),
+        logged_in_api._check_token(),
+    )
+
+    assert len(mock_session.calls_matching("cognito-idp")) == 1
+    assert logged_in_api.account_data.access_token == "test-token"
+    assert logged_in_api.account_data.token_expiration > datetime.now(UTC).timestamp()

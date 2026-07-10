@@ -107,6 +107,9 @@ class VeoliaAPI:
         self.account_data = VeoliaAccountData()
         self._owns_session = session is None
         self._session: aiohttp.ClientSession | None = session
+        # Serializes token checks: concurrent public calls hitting an expired
+        # token would otherwise each run their own Cognito login in parallel.
+        self._token_lock = asyncio.Lock()
 
     @property
     def session(self) -> aiohttp.ClientSession:
@@ -301,22 +304,26 @@ class VeoliaAPI:
 
         When the account has already been discovered, only the Cognito token
         is refreshed; the full login (with account discovery) runs otherwise.
+        Serialized by ``_token_lock`` so concurrent callers never trigger
+        duplicate logins: a caller that waited on the lock re-evaluates the
+        freshly refreshed token and returns without a second login.
         """
-        if (
-            self.account_data.access_token
-            and datetime.now(UTC).timestamp()
-            < self.account_data.token_expiration - TOKEN_EXPIRY_MARGIN
-        ):
-            return
-        _LOGGER.debug("No access token or token expired")
-        if (
-            self.account_data.id_abonnement
-            and self.account_data.numero_pds
-            and self.account_data.date_debut_abonnement
-        ):
-            await self._get_access_token()
-        else:
-            await self.login()
+        async with self._token_lock:
+            if (
+                self.account_data.access_token
+                and datetime.now(UTC).timestamp()
+                < self.account_data.token_expiration - TOKEN_EXPIRY_MARGIN
+            ):
+                return
+            _LOGGER.debug("No access token or token expired")
+            if (
+                self.account_data.id_abonnement
+                and self.account_data.numero_pds
+                and self.account_data.date_debut_abonnement
+            ):
+                await self._get_access_token()
+            else:
+                await self.login()
 
     async def _get_access_token(self) -> None:
         """Request the access token."""
@@ -667,8 +674,15 @@ class VeoliaAPI:
         async def _sem_task(
             task_coro: Coroutine[Any, Any, list[dict[str, Any]]],
         ) -> list[dict[str, Any]]:
-            """Semaphore coro."""
+            """Acquire a slot, revalidate the token, then run the request.
+
+            Long batches (initial multi-year backfill, network retries up to
+            ~80 s per request) can outlive the 60 s expiry margin checked once
+            upfront; the per-task re-check refreshes the token just-in-time and
+            the lock in _check_token keeps concurrent refreshes single-flight.
+            """
             async with semaphore:
+                await self._check_token()
                 return await task_coro
 
         years = list(range(start_date.year, end_date.year + 1))
@@ -681,8 +695,13 @@ class VeoliaAPI:
             for (y, m) in self._iter_months(start_date, end_date)
         ]
 
-        monthly_results = await asyncio.gather(*monthly_tasks) if monthly_tasks else []
-        daily_results = await asyncio.gather(*daily_tasks) if daily_tasks else []
+        all_results = (
+            await asyncio.gather(*monthly_tasks, *daily_tasks)
+            if (monthly_tasks or daily_tasks)
+            else []
+        )
+        monthly_results = all_results[: len(monthly_tasks)]
+        daily_results = all_results[len(monthly_tasks) :]
 
         self.account_data.monthly_consumption = list(
             itertools.chain.from_iterable(monthly_results),
@@ -690,9 +709,13 @@ class VeoliaAPI:
         self.account_data.daily_consumption = list(
             itertools.chain.from_iterable(daily_results),
         )
-        # Fetch other data with no historical
-        self.account_data.billing_plan = await self._get_mensualisation_plan()
-        self.account_data.alert_settings = await self.get_alerts_settings()
+        # Fetch other data with no historical — independent, run concurrently.
+        self.account_data.billing_plan, self.account_data.alert_settings = (
+            await asyncio.gather(
+                self._get_mensualisation_plan(),
+                self.get_alerts_settings(),
+            )
+        )
         _LOGGER.info("OK - All data fetched for range")
 
     async def set_alerts_settings(self, alert_settings: AlertSettings) -> bool:

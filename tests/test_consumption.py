@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 
+from tests.conftest import COGNITO_OK
 from veolia_api.constants import ConsumptionType
 from veolia_api.exceptions import VeoliaAPIGetDataError
 
@@ -13,6 +14,7 @@ JOURNALIERES_URL = r"/consommations/123/journalieres$"
 MENSUELLES_URL = r"/consommations/123/mensuelles$"
 ALERTES_URL = r"/alertes/PDS1$"
 PLAN_URL = r"/facturation/mensualisation/plan$"
+COGNITO_URL = r"cognito-idp\.eu-west-3\.amazonaws\.com"
 
 
 async def test_daily_consumption_params(logged_in_api, mock_session):
@@ -141,3 +143,37 @@ async def test_fetch_all_data_stores_mensualisation_plan(logged_in_api, mock_ses
     assert logged_in_api.account_data.billing_plan == {
         "prelevements_echeancier": [{"montant": 42}],
     }
+
+
+async def test_fetch_all_data_expired_token_single_refresh(
+    logged_in_api,
+    mock_session,
+):
+    logged_in_api.account_data.token_expiration = datetime.now(UTC).timestamp() - 10
+    mock_session.add("POST", COGNITO_URL, payload=COGNITO_OK, repeat=True)
+    mock_session.add("GET", MENSUELLES_URL, payload=[{"m": 1}], repeat=True)
+    mock_session.add("GET", JOURNALIERES_URL, payload=[{"d": 1}], repeat=True)
+    mock_session.add("GET", ALERTES_URL, status=204, repeat=True)
+    mock_session.add("GET", PLAN_URL, status=204, repeat=True)
+
+    await logged_in_api.fetch_all_data(date(2025, 1, 1), date(2025, 1, 1))
+
+    data = logged_in_api.account_data
+    assert len(mock_session.calls_matching("cognito-idp")) == 1
+    assert data.monthly_consumption == [{"m": 1}]
+    assert data.daily_consumption == [{"d": 1}]
+
+
+async def test_fetch_all_data_merges_waves(logged_in_api, mock_session):
+    mock_session.add("GET", MENSUELLES_URL, payload=[{"m": 1}], repeat=True)
+    mock_session.add("GET", JOURNALIERES_URL, payload=[{"d": 1}], repeat=True)
+    mock_session.add("GET", ALERTES_URL, status=204, repeat=True)
+    mock_session.add("GET", PLAN_URL, status=204, repeat=True)
+
+    await logged_in_api.fetch_all_data(date(2025, 1, 1), date(2025, 2, 1))
+
+    data = logged_in_api.account_data
+    assert data.monthly_consumption == [{"m": 1}]
+    assert data.daily_consumption == [{"d": 1}, {"d": 1}]
+    assert len(mock_session.calls_matching("mensuelles")) == 1
+    assert len(mock_session.calls_matching("journalieres")) == 2
