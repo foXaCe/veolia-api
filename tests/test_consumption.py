@@ -59,6 +59,43 @@ async def test_request_before_subscription_start_returns_empty(
     assert mock_session.requests == []
 
 
+async def test_first_month_of_subscription_is_fetched(logged_in_api, mock_session):
+    payload = [{"d": 1}]
+    mock_session.add("GET", JOURNALIERES_URL, status=200, payload=payload)
+
+    result = await logged_in_api._get_consumption_data(
+        ConsumptionType.MONTHLY,
+        2020,
+        1,
+    )
+
+    assert result == payload
+    assert len(mock_session.requests) == 1
+
+
+async def test_first_year_of_subscription_is_fetched(logged_in_api, mock_session):
+    payload = [{"m": 1}]
+    mock_session.add("GET", MENSUELLES_URL, status=200, payload=payload)
+
+    result = await logged_in_api._get_consumption_data(ConsumptionType.YEARLY, 2020)
+
+    assert result == payload
+
+
+async def test_month_entirely_before_subscription_still_skipped(
+    logged_in_api,
+    mock_session,
+):
+    result = await logged_in_api._get_consumption_data(
+        ConsumptionType.MONTHLY,
+        2019,
+        12,
+    )
+
+    assert result == []
+    assert mock_session.requests == []
+
+
 async def test_invalid_type_raises_value_error(logged_in_api):
     with pytest.raises(ValueError, match="Invalid data type"):
         await logged_in_api._get_consumption_data(ConsumptionType.MONTHLY, 2025)

@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VeoliaAPI(...)` no longer raises `RuntimeError: no running event loop` when
   constructed outside async code without an injected session; the session is
   created lazily on first request.
+- Consumption requests covering the subscription's first month or first
+  year are no longer silently skipped when the subscription started
+  mid-period (ports upstream PR Jezza34000/veolia-api#33 by @casi-3).
 
 ### Removed
 
