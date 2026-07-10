@@ -6,6 +6,7 @@ import aiohttp
 import pytest
 
 from veolia_api import resolve_portal_url
+from veolia_api.constants import TIMEOUT
 from veolia_api.exceptions import (
     VeoliaAPIConnectionError,
     VeoliaAPIGetDataError,
@@ -54,6 +55,17 @@ async def test_redirige_resolves_to_portal_hostname(mock_session):
     portal = await resolve_portal_url("Perpignan", session=mock_session)
 
     assert portal == "www.ea-pm.fr"
+
+
+async def test_discovery_request_sets_timeout_and_refuses_redirects(mock_session):
+    mock_session.add("GET", COMMUNES_URL, status=200, payload=PERPIGNAN_ENTRIES)
+
+    await resolve_portal_url("Testville", session=mock_session)
+
+    kwargs = mock_session.calls_matching("communes-nationales")[0][2]
+    assert kwargs["allow_redirects"] is False
+    assert isinstance(kwargs["timeout"], aiohttp.ClientTimeout)
+    assert kwargs["timeout"].total == TIMEOUT
 
 
 async def test_non_redirige_resolves_to_national_portal(mock_session):

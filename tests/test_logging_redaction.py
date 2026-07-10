@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 
-from veolia_api.veolia_api import VeoliaAPI
+from tests.conftest import ALERTS_OK
+from veolia_api.veolia_api import VeoliaAPI, _redact
 
 
 def test_password_param_is_redacted(caplog):
@@ -89,3 +91,30 @@ def test_account_identifiers_in_json_are_redacted(caplog):
     assert "MTR-1" not in caplog.text
     assert "ABO-1" not in caplog.text
     assert "WEB_ORDINATEUR" in caplog.text
+
+
+def test_sensitive_keys_inside_lists_are_redacted():
+    original = {
+        "contacts": [{"titulaire": "Alice", "solde": 1.0}],
+        "seuils": [{"numero_client": "NC1"}],
+    }
+    payload = copy.deepcopy(original)
+
+    redacted = _redact(payload)
+
+    assert redacted["contacts"][0]["titulaire"] == "REDACTED"
+    assert redacted["contacts"][0]["solde"] == 1.0
+    assert redacted["seuils"][0]["numero_client"] == "REDACTED"
+    assert payload == original
+
+
+async def test_alerts_response_log_is_redacted(caplog, logged_in_api, mock_session):
+    payload = copy.deepcopy(ALERTS_OK)
+    payload["seuils"]["journalier"]["numero_client"] = "NC-SECRET"
+    mock_session.add("GET", r"/alertes/PDS1$", status=200, payload=payload)
+
+    with caplog.at_level(logging.DEBUG):
+        await logged_in_api.get_alerts_settings()
+
+    assert "NC-SECRET" not in caplog.text
+    assert "REDACTED" in caplog.text
