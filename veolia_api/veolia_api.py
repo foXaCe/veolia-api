@@ -65,11 +65,11 @@ _REDACTED_KEYS: Final = frozenset(
 def _redact(mapping: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of ``mapping`` with sensitive keys redacted, recursively."""
     return {
-        key: "REDACTED"
-        if key.lower() in _REDACTED_KEYS
-        else _redact(value)
-        if isinstance(value, dict)
-        else value
+        key: (
+            "REDACTED"
+            if key.lower() in _REDACTED_KEYS
+            else _redact(value) if isinstance(value, dict) else value
+        )
         for key, value in mapping.items()
     }
 

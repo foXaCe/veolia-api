@@ -31,16 +31,16 @@ jobs:
           python-version: "3.13"
           cache: pip
 
-      - name: Install project and pip-audit
+      # Install the dependencies only, never the local package itself: right
+      # after a version bump (before the release) that version is not on PyPI
+      # yet, and --strict would fail on the unauditable local distribution.
+      - name: Install dependencies and pip-audit
         run: |
           python -m pip install --upgrade pip
-          pip install -e . pip-audit
+          pip install -r requirements.txt pip-audit
 
-      # --skip-editable: the local package under development is not on PyPI
-      # at audit time (e.g. right after a version bump, before the release) —
-      # only its dependencies are auditable.
       - name: Audit installed dependencies
-        run: pip-audit --strict --desc --skip-editable
+        run: pip-audit --strict --desc
 
   dependency-review:
     name: Dependency review
