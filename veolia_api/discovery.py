@@ -78,7 +78,16 @@ async def resolve_portal_url(
 
     url = f"{REFCOMMUNES_URL}/communes-nationales"
     try:
-        response = await session.request("GET", url, params={"q": commune})
+        response = await session.request(
+            "GET",
+            url,
+            params={"q": commune},
+            # Mirror the main client: an injected shared session (e.g. the Home
+            # Assistant one) has no total timeout of its own, and redirects are
+            # refused everywhere else in this client.
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT),
+            allow_redirects=False,
+        )
     except (aiohttp.ClientError, TimeoutError) as err:
         raise VeoliaAPIConnectionError(
             f"Network error calling {url}: {err}",

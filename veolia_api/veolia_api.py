@@ -62,14 +62,19 @@ _REDACTED_KEYS: Final = frozenset(
 )
 
 
+def _redact_value(value: object) -> object:
+    """Redact ``value`` recursively, descending into dicts and lists."""
+    if isinstance(value, dict):
+        return _redact(value)
+    if isinstance(value, list):
+        return [_redact_value(item) for item in value]
+    return value
+
+
 def _redact(mapping: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of ``mapping`` with sensitive keys redacted, recursively."""
     return {
-        key: (
-            "REDACTED"
-            if key.lower() in _REDACTED_KEYS
-            else _redact(value) if isinstance(value, dict) else value
-        )
+        key: "REDACTED" if key.lower() in _REDACTED_KEYS else _redact_value(value)
         for key, value in mapping.items()
     }
 
@@ -589,7 +594,7 @@ class VeoliaAPI:
             monthly_alert = seuils.get("mensuel") or {}
             monthly_contact = monthly_alert.get("moyen_contact") or {}
 
-            _LOGGER.debug("Alerts settings: %s", data)
+            _LOGGER.debug("Alerts settings: %s", _redact(data))
             _LOGGER.debug("OK - Fetch done for alerts settings")
 
             return AlertSettings(
