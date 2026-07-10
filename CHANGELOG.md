@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `resolve_portal_url(commune)`: resolve a commune name to its portal
   hostname via Veolia's public commune-reference API (see the plan-011
   spike report).
+- Maintainer script `scripts/regenerate_portals.py`: prints a regenerated
+  `VEOLIA_PORTALS` table (13 portals) extracted from the national portal
+  bundle, with a diff against the current table.
 
 ### Changed
 

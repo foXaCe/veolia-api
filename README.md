@@ -103,6 +103,15 @@ To add a portal, add an entry to `VEOLIA_PORTALS` in
 the portal's JavaScript bundle as `ClientId:"..."`) and, if different from the
 default, its `backend_url`.
 
+Maintainers can regenerate the portal table from Veolia's national bundle:
+
+```bash
+python scripts/regenerate_portals.py
+```
+
+The script prints a candidate `VEOLIA_PORTALS` block and a diff against the
+current table — review and edit `veolia_api/portals.py` manually.
+
 ## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on reporting bugs, suggesting features, and submitting pull requests.
