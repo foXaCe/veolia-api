@@ -10,7 +10,7 @@ keep = []
 ignore-words-list = "aaa"
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py311"
 exclude = ["setup.py", "usage_example.py"]
 
 [tool.ruff.lint]
