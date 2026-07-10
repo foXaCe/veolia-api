@@ -41,16 +41,19 @@ async def test_login_body_is_never_logged(caplog, api, mock_session):
         await api._send_request_with_retry(
             url="https://example.test/login",
             method="POST",
-            json_data={
+            login_json={
                 "AuthParameters": {
                     "USERNAME": "alice@example.test",
                     "PASSWORD": "top-secret",
                 },
             },
-            is_login=True,
         )
     assert "top-secret" not in caplog.text
     assert "alice@example.test" not in caplog.text
+    # The body still reaches the HTTP layer.
+    assert mock_session.requests[0][2]["json"]["AuthParameters"]["PASSWORD"] == (
+        "top-secret"
+    )
 
 
 def test_account_identifiers_in_params_are_redacted(caplog):

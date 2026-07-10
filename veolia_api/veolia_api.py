@@ -161,7 +161,7 @@ class VeoliaAPI:
         method: str,
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
-        is_login: bool = False,
+        login_json: dict[str, Any] | None = None,
     ) -> aiohttp.ClientResponse:
         """Send a request, translating network failures to VeoliaAPIConnectionError."""
         try:
@@ -170,7 +170,7 @@ class VeoliaAPI:
                 method=method,
                 params=params,
                 json_data=json_data,
-                is_login=is_login,
+                login_json=login_json,
             )
         except (aiohttp.ClientError, TimeoutError) as err:
             raise VeoliaAPIConnectionError(
@@ -189,9 +189,17 @@ class VeoliaAPI:
         method: str,
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
-        is_login: bool = False,
+        login_json: dict[str, Any] | None = None,
     ) -> aiohttp.ClientResponse:
-        """Make an HTTP request with support for params, headers and JSON body."""
+        """Make an HTTP request with support for params, headers and JSON body.
+
+        The Cognito credentials body travels through ``login_json``, a
+        parameter fully separated from ``json_data`` so that raw credentials
+        can never reach ``_log_request``, even by a wrong branch. A non-None
+        ``login_json`` also switches the request to login mode (Cognito
+        headers, 401 handled by the caller).
+        """
+        is_login = login_json is not None
         req_headers = {
             "User-Agent": (
                 "Mozilla/5.0 (X11; Linux x86_64) "
@@ -207,15 +215,9 @@ class VeoliaAPI:
         if method == POST:
             req_headers["Content-Type"] = "application/json"
 
-        # The login body carries the raw credentials: never hand it to the
-        # logger, even redacted — the other payloads are redacted key-by-key.
-        self._log_request(
-            url,
-            method,
-            params,
-            None if is_login else json_data,
-            req_headers,
-        )
+        # ``json_data`` never carries credentials (they travel via
+        # ``login_json``, which is never logged); it is redacted key-by-key.
+        self._log_request(url, method, params, json_data, req_headers)
 
         kwargs: dict[str, Any] = {
             "headers": req_headers,
@@ -232,11 +234,12 @@ class VeoliaAPI:
             req_headers["Content-Type"] = "application/json"
             kwargs["json"] = json_data
 
-        if is_login:
+        if login_json is not None:
             req_headers["Content-Type"] = "application/x-amz-json-1.1"
             req_headers["x-amz-target"] = (
                 "AWSCognitoIdentityProviderService.InitiateAuth"
             )
+            kwargs["json"] = login_json
 
         response = await self.session.request(method.upper(), url, **kwargs)
         _LOGGER.debug("Received response with status code %s", response.status)
@@ -317,8 +320,7 @@ class VeoliaAPI:
         response = await self._send_request(
             url=token_url,
             method=POST,
-            json_data=json_payload,
-            is_login=True,
+            login_json=json_payload,
         )
 
         token_data = await response.json(content_type="json")
