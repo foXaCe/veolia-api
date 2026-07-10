@@ -93,13 +93,28 @@ ignore = [
     "ERA001", # Commented out code
     "T201", # print found
 ]
+"tests/**/*.py" = [
+    "S101",    # asserts are the whole point of a test
+    "SLF001",  # tests legitimately exercise private helpers
+    "ANN",     # type annotations are optional in tests
+    "D",       # docstrings are optional in tests
+    "PLR2004", # magic values are fine in test data
+    "S105",    # test fixtures use fake secrets
+    "S106",    # test fixtures use fake secrets
+    "INP001",  # tests package layout
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q --cov=veolia_api --cov-report=term-missing"
+
 
 [tool.bumpver]
-current_version = "2.2.3"
+current_version = "2.3.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 tag_message = "{new_version}"
