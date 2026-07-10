@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KeyError`; they fall back to disabled/zero defaults.
 - A Cognito response without `ExpiresIn` no longer marks the token as
   immediately expired (defaults to 1 hour, with a warning).
+- HTTP responses are now released on every error path (429 retries, 401,
+  non-OK statuses), preventing pooled-connection leaks in shared sessions.
 
 ## [2.3.0] - 2026-07-10
 

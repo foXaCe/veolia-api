@@ -87,6 +87,7 @@ class MockSession:
     def __init__(self):
         self._routes = []
         self.requests = []
+        self.served = []
         self.closed = False
 
     def add(self, method, url_pattern, status=200, payload=None, repeat=False):
@@ -111,7 +112,9 @@ class MockSession:
             if route["used"] and not route["repeat"]:
                 continue
             route["used"] = True
-            return MockResponse(status=route["status"], payload=route["payload"])
+            response = MockResponse(status=route["status"], payload=route["payload"])
+            self.served.append(response)
+            return response
         raise AssertionError(f"Unexpected request: {method} {url}")
 
     async def close(self):

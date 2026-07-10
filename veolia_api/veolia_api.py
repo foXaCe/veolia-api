@@ -192,9 +192,11 @@ class VeoliaAPI:
                 method,
                 url,
             )
+            response.release()
             raise VeoliaAPIRateLimitError("HTTP 429 Too Many Requests")
 
         if not is_login and response.status == HTTPStatus.UNAUTHORIZED:
+            response.release()
             raise VeoliaAPITokenError("Authentication rejected (HTTP 401)")
 
         return response
@@ -284,12 +286,13 @@ class VeoliaAPI:
         ).timestamp()
         _LOGGER.debug("OK - Access token retrieved")
 
-    async def _get_client_data(self) -> None:
+    async def _get_client_data(self) -> None:  # noqa: PLR0915
         """Get the account data."""
         _LOGGER.debug("Fetching user & billing data...")
         url = f"{self._backend_url}/espace-client?type-front={TYPE_FRONT}"
         response = await self._send_request(url=url, method=GET)
         if response.status != HTTPStatus.OK:
+            response.release()
             raise VeoliaAPIGetDataError(
                 f"call to= espace-client failed with http status= {response.status}",
             )
@@ -335,6 +338,7 @@ class VeoliaAPI:
         url_facturation = f"{self._backend_url}/abonnements/{self.account_data.id_abonnement}/facturation"
         response_facturation = await self._send_request(url=url_facturation, method=GET)
         if response_facturation.status != HTTPStatus.OK:
+            response_facturation.release()
             raise VeoliaAPIGetDataError(
                 f"call to= facturation failed with http status= {response_facturation.status}",
             )
@@ -416,6 +420,7 @@ class VeoliaAPI:
             params=params,
         )
         if response.status != HTTPStatus.OK:
+            response.release()
             raise VeoliaAPIGetDataError(
                 f"call to= consommations failed with http status= {response.status}",
             )
@@ -498,6 +503,7 @@ class VeoliaAPI:
                     monthly_contact.get("souscrit_par_mobile", False),
                 ),
             )
+        response.release()
         raise VeoliaAPIGetDataError(
             f"call to= alertes failed with http status= {response.status}",
         )
@@ -521,6 +527,7 @@ class VeoliaAPI:
             "call to mensualisation/plan failed with HTTP status %s",
             response.status,
         )
+        response.release()
         return {}
 
     @staticmethod
@@ -624,6 +631,7 @@ class VeoliaAPI:
 
         response = await self._send_request(url=url, method=POST, json_data=payload)
         if response.status != HTTPStatus.NO_CONTENT:
+            response.release()
             raise VeoliaAPISetDataError(
                 f"Failed to set alerts settings with status code {response.status}, maybe alert are not supported on this account ?",
             )
