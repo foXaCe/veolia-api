@@ -1,5 +1,7 @@
 """veolia_api package"""
 
+from __future__ import annotations
+
 from .portals import VEOLIA_PORTAL_CLIENTS, VEOLIA_PORTALS, VeoliaPortal
 from .veolia_api import VeoliaAPI
 
