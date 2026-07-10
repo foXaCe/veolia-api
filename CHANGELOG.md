@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `bumpver` `current_version` realigned with the published package version.
+- Atypical `espace-client` payloads (no contact/tiers/subscription) now raise
+  `VeoliaAPIResponseError` instead of crashing with `TypeError`/`IndexError`.
+- Alert settings with missing `moyen_contact`/`valeur` fields no longer raise
+  `KeyError`; they fall back to disabled/zero defaults.
+- A Cognito response without `ExpiresIn` no longer marks the token as
+  immediately expired (defaults to 1 hour, with a warning).
 
 ## [2.3.0] - 2026-07-10
 

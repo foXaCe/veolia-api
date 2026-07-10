@@ -102,6 +102,21 @@ async def test_login_missing_access_token_raises(api, mock_session):
         await api.login()
 
 
+async def test_missing_expires_in_defaults_to_one_hour(api, mock_session):
+    mock_session.add(
+        "POST",
+        COGNITO_URL,
+        status=200,
+        payload={"AuthenticationResult": {"AccessToken": "t"}},
+    )
+    mock_session.add("GET", ESPACE_CLIENT_URL, payload=ESPACE_CLIENT_OK)
+    mock_session.add("GET", FACTURATION_URL, payload=FACTURATION_OK)
+
+    await api.login()
+
+    assert api.account_data.token_expiration > datetime.now(UTC).timestamp() + 3000
+
+
 async def test_check_token_valid_token_skips_login(logged_in_api, mock_session):
     await logged_in_api._check_token()
 

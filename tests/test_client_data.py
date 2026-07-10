@@ -71,3 +71,30 @@ async def test_missing_date_debut_raises(logged_in_api, mock_session):
 
     with pytest.raises(VeoliaAPIResponseError):
         await logged_in_api._get_client_data()
+
+
+async def test_empty_contacts_raises_response_error(logged_in_api, mock_session):
+    mock_session.add("GET", ESPACE_CLIENT_URL, status=200, payload={"contacts": []})
+
+    with pytest.raises(VeoliaAPIResponseError):
+        await logged_in_api._get_client_data()
+
+
+async def test_missing_contacts_key_raises_response_error(
+    logged_in_api,
+    mock_session,
+):
+    mock_session.add("GET", ESPACE_CLIENT_URL, status=200, payload={})
+
+    with pytest.raises(VeoliaAPIResponseError):
+        await logged_in_api._get_client_data()
+
+
+async def test_empty_abonnements_raises_response_error(logged_in_api, mock_session):
+    payload = {
+        "contacts": [{"id_contact": "C1", "tiers": [{"id": "T1", "abonnements": []}]}],
+    }
+    mock_session.add("GET", ESPACE_CLIENT_URL, status=200, payload=payload)
+
+    with pytest.raises(VeoliaAPIResponseError):
+        await logged_in_api._get_client_data()

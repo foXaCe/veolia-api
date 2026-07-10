@@ -273,9 +273,14 @@ class VeoliaAPI:
         if not self.account_data.access_token:
             raise VeoliaAPITokenError("Access token not found")
 
+        expires_in = authentication_result.get("ExpiresIn")
+        if not expires_in:
+            _LOGGER.warning(
+                "Cognito response has no ExpiresIn, assuming 3600 seconds",
+            )
+            expires_in = 3600
         self.account_data.token_expiration = (
-            datetime.now(UTC)
-            + timedelta(seconds=authentication_result.get("ExpiresIn", 0))
+            datetime.now(UTC) + timedelta(seconds=expires_in)
         ).timestamp()
         _LOGGER.debug("OK - Access token retrieved")
 
@@ -290,25 +295,25 @@ class VeoliaAPI:
             )
 
         userdata = await response.json()
-        self.account_data.id_abonnement = (
-            userdata.get("contacts", None)[0]
-            .get("tiers", None)[0]
-            .get("abonnements", None)[0]
-            .get("id_abonnement", None)
-        )
-        self.account_data.tiers_id = (
-            userdata.get("contacts", None)[0].get("tiers", None)[0].get("id", None)
-        )
-        self.account_data.contact_id = userdata.get("contacts", None)[0].get(
-            "id_contact",
-            None,
-        )
-        self.account_data.numero_compteur = (
-            userdata.get("contacts", None)[0]
-            .get("tiers", None)[0]
-            .get("abonnements", None)[0]
-            .get("numero_compteur", None)
-        )
+        contacts = userdata.get("contacts") or []
+        if not contacts:
+            raise VeoliaAPIResponseError("No contact found in espace-client response")
+        contact = contacts[0]
+        tiers_list = contact.get("tiers") or []
+        if not tiers_list:
+            raise VeoliaAPIResponseError("No tiers found in espace-client response")
+        tiers = tiers_list[0]
+        abonnements = tiers.get("abonnements") or []
+        if not abonnements:
+            raise VeoliaAPIResponseError(
+                "No subscription found in espace-client response",
+            )
+        abonnement = abonnements[0]
+
+        self.account_data.id_abonnement = abonnement.get("id_abonnement")
+        self.account_data.tiers_id = tiers.get("id")
+        self.account_data.contact_id = contact.get("id_contact")
+        self.account_data.numero_compteur = abonnement.get("numero_compteur")
         if (
             not self.account_data.id_abonnement
             or not self.account_data.tiers_id
@@ -318,11 +323,6 @@ class VeoliaAPI:
             raise VeoliaAPIResponseError("Some user data not found in the response")
 
         # Contract details (optional)
-        abonnement = (
-            (userdata.get("contacts") or [{}])[0]
-            .get("tiers", [{}])[0]
-            .get("abonnements", [{}])[0]
-        )
         self.account_data.adresse_de_branchement = abonnement.get(
             "adresse_de_branchement",
         )
@@ -476,36 +476,26 @@ class VeoliaAPI:
         if response.status == HTTPStatus.OK:
             data = await response.json()
             seuils = data.get("seuils", {})
-            daily_alert = seuils.get("journalier", None)
-            monthly_alert = seuils.get("mensuel", None)
+            daily_alert = seuils.get("journalier") or {}
+            daily_contact = daily_alert.get("moyen_contact") or {}
+            monthly_alert = seuils.get("mensuel") or {}
+            monthly_contact = monthly_alert.get("moyen_contact") or {}
 
             _LOGGER.debug("Alerts settings: %s", data)
             _LOGGER.debug("OK - Fetch done for alerts settings")
 
             return AlertSettings(
                 daily_enabled=bool(daily_alert),
-                daily_threshold=daily_alert["valeur"] if daily_alert else 0,
-                daily_notif_email=(
-                    daily_alert["moyen_contact"]["souscrit_par_email"]
-                    if daily_alert
-                    else False
-                ),
-                daily_notif_sms=(
-                    daily_alert["moyen_contact"]["souscrit_par_mobile"]
-                    if daily_alert
-                    else False
-                ),
+                daily_threshold=daily_alert.get("valeur", 0),
+                daily_notif_email=bool(daily_contact.get("souscrit_par_email", False)),
+                daily_notif_sms=bool(daily_contact.get("souscrit_par_mobile", False)),
                 monthly_enabled=bool(monthly_alert),
-                monthly_threshold=(monthly_alert["valeur"] if monthly_alert else 0),
-                monthly_notif_email=(
-                    monthly_alert["moyen_contact"]["souscrit_par_email"]
-                    if monthly_alert
-                    else False
+                monthly_threshold=monthly_alert.get("valeur", 0),
+                monthly_notif_email=bool(
+                    monthly_contact.get("souscrit_par_email", False),
                 ),
-                monthly_notif_sms=(
-                    monthly_alert["moyen_contact"]["souscrit_par_mobile"]
-                    if monthly_alert
-                    else False
+                monthly_notif_sms=bool(
+                    monthly_contact.get("souscrit_par_mobile", False),
                 ),
             )
         raise VeoliaAPIGetDataError(

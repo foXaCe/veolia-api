@@ -73,6 +73,27 @@ async def test_set_alerts_settings_success(logged_in_api, mock_session):
     assert body["abo_id"] == "123"
 
 
+async def test_missing_moyen_contact_defaults_false(logged_in_api, mock_session):
+    payload = {"seuils": {"journalier": {"valeur": 100, "unite": "L"}}}
+    mock_session.add("GET", ALERTES_URL, status=200, payload=payload)
+
+    settings = await logged_in_api.get_alerts_settings()
+
+    assert settings.daily_enabled is True
+    assert settings.daily_threshold == 100
+    assert settings.daily_notif_email is False
+    assert settings.daily_notif_sms is False
+
+
+async def test_missing_valeur_defaults_zero(logged_in_api, mock_session):
+    payload = {"seuils": {"journalier": {"moyen_contact": {}}}}
+    mock_session.add("GET", ALERTES_URL, status=200, payload=payload)
+
+    settings = await logged_in_api.get_alerts_settings()
+
+    assert settings.daily_threshold == 0
+
+
 async def test_set_alerts_settings_failure_raises(logged_in_api, mock_session):
     mock_session.add("POST", ALERTES_URL, status=400)
     settings = AlertSettings(
