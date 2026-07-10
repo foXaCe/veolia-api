@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-07-10
+
+### Added
+
+- PEP 561 `py.typed` marker: consumers' type checkers now see the package's
+  full type annotations instead of treating everything as `Any`.
+
+### Changed
+
+- Single-flight token refresh: an instance lock serializes `_check_token`,
+  so concurrent calls hitting an expired token no longer each run their own
+  Cognito login.
+- `fetch_all_data` revalidates the token inside each batched task (long
+  backfills with retries can outlive the 60 s expiry margin checked upfront)
+  and now runs in 2 HTTP waves instead of 4 (monthly+daily share one gather;
+  billing plan and alert settings are fetched concurrently).
+
+### Fixed
+
+- A closed client can be reused: `close()` resets the owned session so the
+  next request lazily creates a fresh one (previously
+  `RuntimeError: Session is closed`).
+- Defensive Cognito response parsing: an empty body (gateway 502/504) or a
+  non-JSON body (WAF/CDN error page) now raises `VeoliaAPITokenError` instead
+  of leaking `AttributeError` / `aiohttp.ContentTypeError`.
+- Devbox onboarding repaired: the `init_hook` installs the local package
+  (editable) instead of the upstream `veolia-api` PyPI package, Python floor
+  aligned to 3.11, and `run_test` points at `pytest` instead of a
+  nonexistent `main.py`.
+
+### Security
+
+- `_redact()` now recurses into lists of dicts, closing a latent redaction
+  bypass for payload shapes the API demonstrably uses.
+- The `get_alerts_settings` response body is redacted before being debug
+  logged (the last unredacted response log in the client).
+- `resolve_portal_url` requests now set a per-request timeout and refuse
+  redirects, mirroring the main client's hardening.
+
+## [2.4.1] - 2026-07-10
+
+### Security
+
+- The Cognito login body (including the account e-mail) can no longer reach
+  debug logs: credentials travel through a dedicated `login_json` parameter
+  that is never passed to the request logger.
+- Redaction is applied recursively to nested keys, and `username` is
+  redacted alongside the other identifiers.
+
+### Fixed
+
+- CI: `pip-audit` audits the requirements only, skipping the local editable
+  package (version-bump race with the PyPI index).
+
+## [2.4.0] - 2026-07-10
+
 ### Added
 
 - Repository tooling: `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.editorconfig`,
@@ -90,5 +146,8 @@ Releases prior to the `veolia-api-foxace` fork are tracked in the git tags of
 this repository and in the upstream project
 [`Jezza34000/veolia-api`](https://github.com/Jezza34000/veolia-api).
 
-[Unreleased]: https://github.com/foXaCe/veolia-api/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/foXaCe/veolia-api/compare/v2.4.2...HEAD
+[2.4.2]: https://github.com/foXaCe/veolia-api/compare/v2.4.1...v2.4.2
+[2.4.1]: https://github.com/foXaCe/veolia-api/compare/v2.4.0...v2.4.1
+[2.4.0]: https://github.com/foXaCe/veolia-api/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/foXaCe/veolia-api/releases/tag/v2.3.0
