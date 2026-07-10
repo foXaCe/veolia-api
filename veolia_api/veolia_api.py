@@ -57,14 +57,19 @@ _REDACTED_KEYS: Final = frozenset(
         "abo_id",
         "numero_client",
         "titulaire",
+        "username",
     },
 )
 
 
 def _redact(mapping: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of ``mapping`` with sensitive keys redacted."""
+    """Return a copy of ``mapping`` with sensitive keys redacted, recursively."""
     return {
-        key: "REDACTED" if key.lower() in _REDACTED_KEYS else value
+        key: "REDACTED"
+        if key.lower() in _REDACTED_KEYS
+        else _redact(value)
+        if isinstance(value, dict)
+        else value
         for key, value in mapping.items()
     }
 
@@ -128,10 +133,10 @@ class VeoliaAPI:
         json_data: dict[str, Any] | None,
         headers: dict[str, str],
     ) -> None:
-        """Debug-log a request with credentials redacted.
+        """Debug-log a request with sensitive keys redacted (recursively).
 
-        The Cognito login payload carries the password in ``AuthParameters``;
-        headers carry the bearer token.
+        Headers carry the bearer token; the Cognito login body is never
+        passed here at all (see ``_send_request_with_retry``).
         """
         safe_params = _redact(params) if params else {}
 
@@ -139,12 +144,7 @@ class VeoliaAPI:
         if "Authorization" in safe_headers:
             safe_headers["Authorization"] = "REDACTED"
 
-        safe_json = None
-        if json_data is not None:
-            safe_json = _redact(json_data)
-            auth_params = safe_json.get("AuthParameters")
-            if isinstance(auth_params, dict) and "PASSWORD" in auth_params:
-                safe_json["AuthParameters"] = {**auth_params, "PASSWORD": "REDACTED"}
+        safe_json = _redact(json_data) if json_data is not None else None
 
         _LOGGER.debug(
             "Making %s request to %s with params: %s, headers: %s, json: %s",
@@ -207,7 +207,15 @@ class VeoliaAPI:
         if method == POST:
             req_headers["Content-Type"] = "application/json"
 
-        self._log_request(url, method, params, json_data, req_headers)
+        # The login body carries the raw credentials: never hand it to the
+        # logger, even redacted — the other payloads are redacted key-by-key.
+        self._log_request(
+            url,
+            method,
+            params,
+            None if is_login else json_data,
+            req_headers,
+        )
 
         kwargs: dict[str, Any] = {
             "headers": req_headers,

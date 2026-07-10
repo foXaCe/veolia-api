@@ -30,8 +30,27 @@ def test_cognito_password_and_bearer_are_redacted(caplog):
             {"Authorization": "Bearer abc123"},
         )
     assert "top-secret" not in caplog.text
+    assert "alice" not in caplog.text
     assert "abc123" not in caplog.text
     assert "REDACTED" in caplog.text
+
+
+async def test_login_body_is_never_logged(caplog, api, mock_session):
+    mock_session.add("POST", r"login$", status=200, payload={})
+    with caplog.at_level(logging.DEBUG):
+        await api._send_request_with_retry(
+            url="https://example.test/login",
+            method="POST",
+            json_data={
+                "AuthParameters": {
+                    "USERNAME": "alice@example.test",
+                    "PASSWORD": "top-secret",
+                },
+            },
+            is_login=True,
+        )
+    assert "top-secret" not in caplog.text
+    assert "alice@example.test" not in caplog.text
 
 
 def test_account_identifiers_in_params_are_redacted(caplog):
