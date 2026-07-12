@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.3] - 2026-07-12
+
+### Fixed
+
+- Self-heal on a rejected bearer token: the Veolia data backend answers a
+  stale or server-invalidated token with `403` as often as `401`. Both now
+  surface as a token error that triggers a single-flight re-authentication
+  and one request retry, so a session that goes stale between two refresh
+  cycles recovers on its own instead of failing every cycle (previously the
+  `403` was fatal until the integration restarted).
+- No more leaked coroutines: `fetch_all_data` now gathers with
+  `return_exceptions=True` and surfaces the first failure only after every
+  request has settled. A single failing request (e.g. the `403` above) no
+  longer aborts the gather early and discards the semaphore-queued
+  coroutines un-awaited, which emitted `coroutine ... was never awaited`
+  `RuntimeWarning`s.
+
 ## [2.4.2] - 2026-07-10
 
 ### Added

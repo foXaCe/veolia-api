@@ -17,6 +17,7 @@ from veolia_api.exceptions import (
 COGNITO_URL = r"cognito-idp\.eu-west-3\.amazonaws\.com"
 ESPACE_CLIENT_URL = r"/espace-client"
 FACTURATION_URL = r"/facturation$"
+PLAN_URL = r"/facturation/mensualisation/plan$"
 
 
 class RaisingSession:
@@ -58,9 +59,26 @@ async def test_unauthorized_raises_token_error(logged_in_api, mock_session):
     mock_session.add("GET", ESPACE_CLIENT_URL, status=401)
 
     with pytest.raises(VeoliaAPITokenError):
-        await logged_in_api._get_client_data()
+        await logged_in_api._send_request_with_retry(
+            url="https://x.test/espace-client",
+            method="GET",
+        )
 
     assert len(mock_session.requests) == 1
+
+
+async def test_forbidden_raises_token_error(logged_in_api, mock_session):
+    # Veolia answers a stale bearer token with 403 as well as 401.
+    mock_session.add("GET", ESPACE_CLIENT_URL, status=403)
+
+    with pytest.raises(VeoliaAPITokenError):
+        await logged_in_api._send_request_with_retry(
+            url="https://x.test/espace-client",
+            method="GET",
+        )
+
+    assert len(mock_session.requests) == 1
+    assert mock_session.served[0].released is True
 
 
 async def test_bearer_header_sent_when_token_present(logged_in_api, mock_session):
@@ -102,7 +120,10 @@ async def test_401_response_is_released(logged_in_api, mock_session):
     mock_session.add("GET", ESPACE_CLIENT_URL, status=401)
 
     with pytest.raises(VeoliaAPITokenError):
-        await logged_in_api._get_client_data()
+        await logged_in_api._send_request_with_retry(
+            url="https://x.test/espace-client",
+            method="GET",
+        )
 
     assert mock_session.served[0].released is True
 
@@ -126,6 +147,24 @@ async def test_mensualisation_plan_failure_response_is_released(
 
     assert result == {}
     assert mock_session.served[0].released is True
+
+
+async def test_mensualisation_plan_persistent_403_is_skipped(
+    logged_in_api,
+    mock_session,
+):
+    # The optional plan keeps rejecting even after the re-login: it must be
+    # skipped (return {}), never fail the whole refresh.
+    mock_session.add("GET", PLAN_URL, status=403, repeat=True)
+    mock_session.add("POST", COGNITO_URL, payload=COGNITO_OK, repeat=True)
+    mock_session.add("GET", ESPACE_CLIENT_URL, payload=ESPACE_CLIENT_OK, repeat=True)
+    mock_session.add("GET", FACTURATION_URL, payload=FACTURATION_OK, repeat=True)
+
+    result = await logged_in_api._get_mensualisation_plan()
+
+    assert result == {}
+    # The 403 did trigger exactly one re-login before giving up.
+    assert len(mock_session.calls_matching("cognito-idp")) == 1
 
 
 @pytest.mark.usefixtures("no_retry_wait")
