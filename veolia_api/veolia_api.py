@@ -41,7 +41,7 @@ from .model import AlertSettings, VeoliaAccountData
 from .portals import get_portal
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine, Iterator
+    from collections.abc import Coroutine, Iterable, Iterator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -79,6 +79,19 @@ def _redact(mapping: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _raise_first_exception(results: Iterable[object]) -> None:
+    """Re-raise the first exception found in a ``gather`` result set.
+
+    ``asyncio.gather(..., return_exceptions=True)`` waits for every awaitable
+    to settle before returning, so no queued coroutine is discarded un-awaited
+    (which would emit a "coroutine was never awaited" RuntimeWarning). This
+    surfaces the first failure once all of them have settled.
+    """
+    for result in results:
+        if isinstance(result, BaseException):
+            raise result
+
+
 class VeoliaAPI:
     """Veolia API client."""
 
@@ -110,6 +123,10 @@ class VeoliaAPI:
         # Serializes token checks: concurrent public calls hitting an expired
         # token would otherwise each run their own Cognito login in parallel.
         self._token_lock = asyncio.Lock()
+        # True while a forced re-authentication (after the API rejected the
+        # bearer token) is in flight: keeps the re-login's own requests from
+        # recursively triggering another re-authentication.
+        self._reauthing = False
 
     @property
     def session(self) -> aiohttp.ClientSession:
@@ -169,15 +186,28 @@ class VeoliaAPI:
             safe_json,
         )
 
-    async def _send_request(
+    async def _send_request(  # noqa: PLR0913
         self,
         url: str,
         method: str,
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
         login_json: dict[str, Any] | None = None,
+        *,
+        allow_reauth: bool = True,
     ) -> aiohttp.ClientResponse:
-        """Send a request, translating network failures to VeoliaAPIConnectionError."""
+        """Send a request, recovering once from a rejected bearer token.
+
+        The Veolia backend answers an expired or server-invalidated token with
+        401 *or* 403 (see ``_send_request_with_retry``); both surface as
+        ``VeoliaAPITokenError``. On the first such rejection this forces a
+        single-flight re-authentication and retries the request once, so a
+        session that goes stale between two refresh cycles heals itself instead
+        of failing every cycle until Home Assistant restarts.
+
+        Network failures are translated to ``VeoliaAPIConnectionError``.
+        """
+        token_before = self.account_data.access_token
         try:
             return await self._send_request_with_retry(
                 url=url,
@@ -185,6 +215,24 @@ class VeoliaAPI:
                 params=params,
                 json_data=json_data,
                 login_json=login_json,
+            )
+        except VeoliaAPITokenError:
+            # Do not recover a login call itself, a retry that already ran, or a
+            # request issued *by* the in-flight re-login (that would recurse).
+            if login_json is not None or not allow_reauth or self._reauthing:
+                raise
+            _LOGGER.info(
+                "Bearer token rejected by the API; re-authenticating and "
+                "retrying the request once",
+            )
+            await self._reauthenticate(token_before)
+            return await self._send_request(
+                url,
+                method,
+                params=params,
+                json_data=json_data,
+                login_json=login_json,
+                allow_reauth=False,
             )
         except (aiohttp.ClientError, TimeoutError) as err:
             raise VeoliaAPIConnectionError(
@@ -266,9 +314,16 @@ class VeoliaAPI:
             response.release()
             raise VeoliaAPIRateLimitError("HTTP 429 Too Many Requests")
 
-        if not is_login and response.status == HTTPStatus.UNAUTHORIZED:
+        if not is_login and response.status in (
+            HTTPStatus.UNAUTHORIZED,
+            HTTPStatus.FORBIDDEN,
+        ):
+            # Veolia's data backend rejects a stale/invalidated bearer token
+            # with 403 as often as 401; both mean "re-authenticate".
             response.release()
-            raise VeoliaAPITokenError("Authentication rejected (HTTP 401)")
+            raise VeoliaAPITokenError(
+                f"Authentication rejected (HTTP {response.status})",
+            )
 
         return response
 
@@ -324,6 +379,27 @@ class VeoliaAPI:
                 await self._get_access_token()
             else:
                 await self.login()
+
+    async def _reauthenticate(self, stale_token: str | None) -> None:
+        """Force a fresh login after the API rejected the bearer token.
+
+        Serialized by ``_token_lock`` and guarded for single-flight: if the
+        active token already differs from ``stale_token`` a concurrent caller
+        has re-authenticated, so this returns without a second login. The
+        ``_reauthing`` flag keeps the re-login's own requests from recursing
+        back into another re-authentication.
+        """
+        async with self._token_lock:
+            if self.account_data.access_token != stale_token:
+                return
+            _LOGGER.debug("Re-authenticating after bearer-token rejection")
+            self._reauthing = True
+            self.account_data.access_token = None
+            self.account_data.token_expiration = 0
+            try:
+                await self.login()
+            finally:
+                self._reauthing = False
 
     async def _get_access_token(self) -> None:
         """Request the access token."""
@@ -628,7 +704,16 @@ class VeoliaAPI:
         _LOGGER.debug("Getting mensualisation plan...")
         url = f"{self._backend_url}/abonnements/{self.account_data.id_abonnement}/facturation/mensualisation/plan"
 
-        response = await self._send_request(url=url, method=GET)
+        try:
+            response = await self._send_request(url=url, method=GET)
+        except VeoliaAPITokenError:
+            # Optional data: a persistent auth rejection here (the request layer
+            # already re-authenticated and retried once) must not fail the whole
+            # refresh — the mensualisation plan is simply skipped.
+            _LOGGER.warning(
+                "mensualisation/plan rejected after re-authentication; skipping",
+            )
+            return {}
 
         if response.status == HTTPStatus.NO_CONTENT:
             _LOGGER.info("No mensualisation plan found")
@@ -696,12 +781,28 @@ class VeoliaAPI:
         ]
 
         all_results = (
-            await asyncio.gather(*monthly_tasks, *daily_tasks)
+            await asyncio.gather(
+                *monthly_tasks,
+                *daily_tasks,
+                return_exceptions=True,
+            )
             if (monthly_tasks or daily_tasks)
             else []
         )
-        monthly_results = all_results[: len(monthly_tasks)]
-        daily_results = all_results[len(monthly_tasks) :]
+        # Await every request before surfacing a failure: aborting the gather
+        # on the first exception would discard the semaphore-queued coroutines
+        # un-awaited ("coroutine ... was never awaited" RuntimeWarning).
+        _raise_first_exception(all_results)
+        # Past _raise_first_exception every element is a payload list, never an
+        # exception; cast so the type checker drops the BaseException union.
+        monthly_results = cast(
+            "list[list[dict[str, Any]]]",
+            all_results[: len(monthly_tasks)],
+        )
+        daily_results = cast(
+            "list[list[dict[str, Any]]]",
+            all_results[len(monthly_tasks) :],
+        )
 
         self.account_data.monthly_consumption = list(
             itertools.chain.from_iterable(monthly_results),
@@ -710,12 +811,14 @@ class VeoliaAPI:
             itertools.chain.from_iterable(daily_results),
         )
         # Fetch other data with no historical — independent, run concurrently.
-        self.account_data.billing_plan, self.account_data.alert_settings = (
-            await asyncio.gather(
-                self._get_mensualisation_plan(),
-                self.get_alerts_settings(),
-            )
+        plan_result, alerts_result = await asyncio.gather(
+            self._get_mensualisation_plan(),
+            self.get_alerts_settings(),
+            return_exceptions=True,
         )
+        _raise_first_exception((plan_result, alerts_result))
+        self.account_data.billing_plan = cast("dict[str, Any]", plan_result)
+        self.account_data.alert_settings = cast("AlertSettings", alerts_result)
         _LOGGER.info("OK - All data fetched for range")
 
     async def set_alerts_settings(self, alert_settings: AlertSettings) -> bool:
