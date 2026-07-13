@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.4] - 2026-07-13
+
+### Fixed
+
+- Concurrent requests rejected together now heal with a single re-login:
+  when several in-flight requests got 401/403 with the same stale token,
+  the first triggered the re-authentication but the others raised
+  immediately (a flag meant to guard the re-login's own requests also
+  poisoned concurrent data requests), failing the whole refresh cycle.
+  Rejected requests now wait on the token lock and retry with the fresh
+  token, single-flighted by an authentication-generation counter instead
+  of a token-value comparison (which breaks when Cognito returns an
+  identical token). The recursion/deadlock guard is now carried
+  explicitly by the re-login's own requests.
+
 ## [2.4.3] - 2026-07-12
 
 ### Fixed

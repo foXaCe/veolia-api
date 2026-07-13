@@ -123,10 +123,11 @@ class VeoliaAPI:
         # Serializes token checks: concurrent public calls hitting an expired
         # token would otherwise each run their own Cognito login in parallel.
         self._token_lock = asyncio.Lock()
-        # True while a forced re-authentication (after the API rejected the
-        # bearer token) is in flight: keeps the re-login's own requests from
-        # recursively triggering another re-authentication.
-        self._reauthing = False
+        # Bumped on every successful token fetch. Requests capture it before
+        # running; a rejected request only forces a re-login if no other
+        # caller has re-authenticated since (single-flight, independent of
+        # the token value itself).
+        self._auth_generation = 0
 
     @property
     def session(self) -> aiohttp.ClientSession:
@@ -207,7 +208,7 @@ class VeoliaAPI:
 
         Network failures are translated to ``VeoliaAPIConnectionError``.
         """
-        token_before = self.account_data.access_token
+        auth_gen_before = self._auth_generation
         try:
             return await self._send_request_with_retry(
                 url=url,
@@ -217,15 +218,20 @@ class VeoliaAPI:
                 login_json=login_json,
             )
         except VeoliaAPITokenError:
-            # Do not recover a login call itself, a retry that already ran, or a
-            # request issued *by* the in-flight re-login (that would recurse).
-            if login_json is not None or not allow_reauth or self._reauthing:
+            # Do not recover a login call itself or a retry that already ran.
+            # Requests issued *by* the re-login flow carry allow_reauth=False
+            # (see _get_client_data), so they can never recurse back here.
+            # Concurrent data requests rejected during an in-flight re-login
+            # DO fall through: _reauthenticate serializes them on the token
+            # lock and returns as soon as the token has been renewed, so they
+            # simply retry with the fresh token instead of failing the cycle.
+            if login_json is not None or not allow_reauth:
                 raise
             _LOGGER.info(
                 "Bearer token rejected by the API; re-authenticating and "
                 "retrying the request once",
             )
-            await self._reauthenticate(token_before)
+            await self._reauthenticate(auth_gen_before)
             return await self._send_request(
                 url,
                 method,
@@ -380,26 +386,25 @@ class VeoliaAPI:
             else:
                 await self.login()
 
-    async def _reauthenticate(self, stale_token: str | None) -> None:
+    async def _reauthenticate(self, stale_generation: int) -> None:
         """Force a fresh login after the API rejected the bearer token.
 
-        Serialized by ``_token_lock`` and guarded for single-flight: if the
-        active token already differs from ``stale_token`` a concurrent caller
-        has re-authenticated, so this returns without a second login. The
-        ``_reauthing`` flag keeps the re-login's own requests from recursing
-        back into another re-authentication.
+        Serialized by ``_token_lock`` and guarded for single-flight: a caller
+        whose request was rejected during an in-flight re-login waits on the
+        lock, then finds ``_auth_generation`` already bumped past the
+        generation its request ran under and returns without a second login —
+        it just retries with the fresh token. Deadlock safety: every request
+        issued while the lock is held is either login-mode (``login_json``)
+        or carries ``allow_reauth=False`` (see ``_get_client_data``), so none
+        can re-enter this method.
         """
         async with self._token_lock:
-            if self.account_data.access_token != stale_token:
+            if self._auth_generation != stale_generation:
                 return
             _LOGGER.debug("Re-authenticating after bearer-token rejection")
-            self._reauthing = True
             self.account_data.access_token = None
             self.account_data.token_expiration = 0
-            try:
-                await self.login()
-            finally:
-                self._reauthing = False
+            await self.login()
 
     async def _get_access_token(self) -> None:
         """Request the access token."""
@@ -458,13 +463,20 @@ class VeoliaAPI:
         self.account_data.token_expiration = (
             datetime.now(UTC) + timedelta(seconds=expires_in)
         ).timestamp()
+        self._auth_generation += 1
         _LOGGER.debug("OK - Access token retrieved")
 
     async def _get_client_data(self) -> None:
-        """Get the account data."""
+        """Get the account data.
+
+        Called from ``login()``, possibly inside ``_reauthenticate`` (which
+        holds ``_token_lock``): both requests disable the token-rejection
+        recovery so a 401/403 here surfaces immediately instead of recursing
+        into another re-login (and deadlocking on the non-reentrant lock).
+        """
         _LOGGER.debug("Fetching user & billing data...")
         url = f"{self._backend_url}/espace-client?type-front={TYPE_FRONT}"
-        response = await self._send_request(url=url, method=GET)
+        response = await self._send_request(url=url, method=GET, allow_reauth=False)
         if response.status != HTTPStatus.OK:
             response.release()
             raise VeoliaAPIGetDataError(
@@ -477,7 +489,11 @@ class VeoliaAPI:
 
         # Facturation request
         url_facturation = f"{self._backend_url}/abonnements/{self.account_data.id_abonnement}/facturation"
-        response_facturation = await self._send_request(url=url_facturation, method=GET)
+        response_facturation = await self._send_request(
+            url=url_facturation,
+            method=GET,
+            allow_reauth=False,
+        )
         if response_facturation.status != HTTPStatus.OK:
             response_facturation.release()
             raise VeoliaAPIGetDataError(

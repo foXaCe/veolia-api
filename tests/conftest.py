@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import UTC, datetime
 
@@ -101,6 +102,7 @@ class MockSession:
         payload=None,
         repeat=False,
         json_exc=None,
+        delay=0,
     ):
         self._routes.append(
             {
@@ -111,6 +113,7 @@ class MockSession:
                 "repeat": repeat,
                 "used": False,
                 "json_exc": json_exc,
+                "delay": delay,
             },
         )
 
@@ -124,6 +127,10 @@ class MockSession:
             if route["used"] and not route["repeat"]:
                 continue
             route["used"] = True
+            if route["delay"]:
+                # Real suspension point: lets concurrently-running tasks
+                # interleave here, so tests can pin down race windows.
+                await asyncio.sleep(route["delay"])
             response = MockResponse(
                 status=route["status"],
                 payload=route["payload"],
