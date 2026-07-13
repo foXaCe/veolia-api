@@ -196,6 +196,60 @@ async def test_fetch_all_data_recovers_from_403_after_reauth(
     assert len(mock_session.calls_matching("cognito-idp")) == 1
 
 
+async def test_concurrent_403s_recover_with_single_relogin(
+    logged_in_api,
+    mock_session,
+):
+    """Two requests rejected together heal with ONE re-login, no failed cycle.
+
+    Production race (v2.4.3): the monthly and daily requests run concurrently
+    and both get 403 with the same stale token. The first triggers the
+    re-login; the second must WAIT for it (token lock) and retry with the
+    fresh token — not fail the whole refresh. The delays pin the interleaving:
+    both 403 responses are in flight together (so both requests ran under the
+    same auth generation), and the Cognito call is slow enough that the second
+    403 is handled while the re-login is still in flight — exactly the window
+    that used to raise.
+    """
+    mock_session.add("GET", MENSUELLES_URL, status=403, delay=0.01)
+    mock_session.add("GET", MENSUELLES_URL, payload=[{"m": 1}], repeat=True)
+    mock_session.add("GET", JOURNALIERES_URL, status=403, delay=0.01)
+    mock_session.add("GET", JOURNALIERES_URL, payload=[{"d": 1}], repeat=True)
+    mock_session.add("GET", ALERTES_URL, status=204, repeat=True)
+    mock_session.add("GET", PLAN_URL, status=204, repeat=True)
+    mock_session.add("POST", COGNITO_URL, payload=COGNITO_OK, repeat=True, delay=0.05)
+    mock_session.add("GET", ESPACE_CLIENT_URL, payload=ESPACE_CLIENT_OK, repeat=True)
+    mock_session.add("GET", FACTURATION_URL, payload=FACTURATION_OK, repeat=True)
+
+    await logged_in_api.fetch_all_data(date(2025, 1, 1), date(2025, 1, 1))
+
+    data = logged_in_api.account_data
+    assert data.monthly_consumption == [{"m": 1}]
+    assert data.daily_consumption == [{"d": 1}]
+    # Single-flight: both 403s were healed by exactly ONE re-login.
+    assert len(mock_session.calls_matching("cognito-idp")) == 1
+
+
+async def test_relogin_rejected_does_not_recurse(logged_in_api, mock_session):
+    """A 403 inside the re-login flow surfaces immediately — no loop/deadlock.
+
+    The re-login's own espace-client request runs while the token lock is
+    held; if it is itself rejected it must raise (allow_reauth=False), not
+    re-enter the re-authentication path.
+    """
+    mock_session.add("GET", JOURNALIERES_URL, status=403, repeat=True)
+    mock_session.add("GET", MENSUELLES_URL, payload=[{"m": 1}], repeat=True)
+    mock_session.add("POST", COGNITO_URL, payload=COGNITO_OK, repeat=True)
+    mock_session.add("GET", ESPACE_CLIENT_URL, status=403, repeat=True)
+
+    with pytest.raises(VeoliaAPITokenError):
+        await logged_in_api.fetch_all_data(date(2025, 1, 1), date(2025, 1, 1))
+
+    # One re-login attempt, one rejected espace-client call: no recursion.
+    assert len(mock_session.calls_matching("cognito-idp")) == 1
+    assert len(mock_session.calls_matching("espace-client")) == 1
+
+
 async def test_fetch_all_data_persistent_403_raises_token_error(
     logged_in_api,
     mock_session,
