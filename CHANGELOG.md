@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-09-03
+
 ### Added
 
 - `VeoliaAPI` accepts a `refresh_token` argument, authenticating through
@@ -194,7 +196,10 @@ Releases prior to the `veolia-api-foxace` fork are tracked in the git tags of
 this repository and in the upstream project
 [`Jezza34000/veolia-api`](https://github.com/Jezza34000/veolia-api).
 
-[Unreleased]: https://github.com/foXaCe/veolia-api/compare/v2.4.2...HEAD
+[Unreleased]: https://github.com/foXaCe/veolia-api/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/foXaCe/veolia-api/compare/v2.4.4...v2.5.0
+[2.4.4]: https://github.com/foXaCe/veolia-api/compare/v2.4.3...v2.4.4
+[2.4.3]: https://github.com/foXaCe/veolia-api/compare/v2.4.2...v2.4.3
 [2.4.2]: https://github.com/foXaCe/veolia-api/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/foXaCe/veolia-api/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/foXaCe/veolia-api/compare/v2.3.0...v2.4.0
