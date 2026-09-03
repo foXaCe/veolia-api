@@ -29,6 +29,7 @@ from .constants import (
     ConsumptionType,
 )
 from .exceptions import (
+    VeoliaAPIChallengeError,
     VeoliaAPIConnectionError,
     VeoliaAPIGetDataError,
     VeoliaAPIInvalidCredentialsError,
@@ -58,6 +59,7 @@ _REDACTED_KEYS: Final = frozenset(
         "numero_client",
         "titulaire",
         "username",
+        "refresh_token",
     },
 )
 
@@ -101,19 +103,29 @@ class VeoliaAPI:
         password: str,
         session: aiohttp.ClientSession | None = None,
         portal_url: str | None = None,
+        *,
+        refresh_token: str | None = None,
     ) -> None:
         """Initialize the Veolia API client.
 
         Args:
-            username: Veolia account email.
-            password: Veolia account password.
+            username: Veolia account email. Ignored, and may be empty, when
+                ``refresh_token`` is given.
+            password: Veolia account password. Ignored, and may be empty,
+                when ``refresh_token`` is given.
             session: optional shared aiohttp session.
             portal_url: hostname of the Veolia portal to use (see
                 ``VEOLIA_PORTALS``). Defaults to the national portal.
+            refresh_token: Cognito refresh token, authenticating through
+                ``REFRESH_TOKEN_AUTH`` instead of the username and password.
+                The way in for a portal whose adaptive authentication answers
+                password sign-ins with an unanswerable challenge — see
+                ``VeoliaAPIChallengeError``.
 
         """
         self.username = username
         self.password = password
+        self._refresh_token = refresh_token
         portal = get_portal(portal_url)
         self._client_id = portal.client_id
         self._backend_url = portal.backend_url
@@ -334,31 +346,40 @@ class VeoliaAPI:
         return response
 
     async def login(self) -> bool:
-        """Login to the Veolia API."""
-        _LOGGER.info("Logging in...")
-        email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+        """Login to the Veolia API.
 
-        if not self.username or not self.password:
-            raise VeoliaAPIInvalidCredentialsError("Missing username or password")
-        if not re.match(email_regex, self.username):
-            raise VeoliaAPIInvalidCredentialsError("Invalid email format")
+        A client built with a refresh token holds no username or password, so
+        the credential checks below are skipped for it: the token itself is
+        the credential, and Cognito is the only judge of its validity.
+        """
+        _LOGGER.info("Logging in...")
+
+        if self._refresh_token is None:
+            email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+            if not self.username or not self.password:
+                raise VeoliaAPIInvalidCredentialsError("Missing username or password")
+            if not re.match(email_regex, self.username):
+                raise VeoliaAPIInvalidCredentialsError("Invalid email format")
         _LOGGER.debug("Starting login process...")
         await self._get_access_token()
         await self._get_client_data()
 
-        # Check if login was successful
-        if (
+        if self._account_data_complete():
+            _LOGGER.info("Login successful")
+            return True
+        return False
+
+    def _account_data_complete(self) -> bool:
+        """Return whether discovery filled everything the client needs."""
+        return bool(
             self.account_data.access_token
             and self.account_data.id_abonnement
             and self.account_data.numero_pds
             and self.account_data.contact_id
             and self.account_data.tiers_id
             and self.account_data.numero_compteur
-            and self.account_data.date_debut_abonnement
-        ):
-            _LOGGER.info("Login successful")
-            return True
-        return False
+            and self.account_data.date_debut_abonnement,
+        )
 
     async def _check_token(self) -> None:
         """Ensure a valid access token, re-authenticating if needed.
@@ -407,14 +428,33 @@ class VeoliaAPI:
             await self.login()
 
     async def _get_access_token(self) -> None:
-        """Request the access token."""
+        """Request the access token, by refresh token or by password.
+
+        ``REFRESH_TOKEN_AUTH`` is not a sign-in flow, so Cognito never
+        risk-scores it and never answers it with a challenge: a token obtained
+        once from a context it already trusts authenticates from any address.
+        """
         token_url = f"{LOGIN_URL}"
         _LOGGER.debug("Requesting access token...")
-        json_payload = {
-            "ClientId": self._client_id,
-            "AuthFlow": "USER_PASSWORD_AUTH",
-            "AuthParameters": {"USERNAME": self.username, "PASSWORD": self.password},
-        }
+        if self._refresh_token is not None:
+            # _send_request sets an Authorization header as soon as an access
+            # token is present: presenting the expired one to Cognito while
+            # asking it for a new one makes no sense.
+            self.account_data.access_token = None
+            json_payload = {
+                "ClientId": self._client_id,
+                "AuthFlow": "REFRESH_TOKEN_AUTH",
+                "AuthParameters": {"REFRESH_TOKEN": self._refresh_token},
+            }
+        else:
+            json_payload = {
+                "ClientId": self._client_id,
+                "AuthFlow": "USER_PASSWORD_AUTH",
+                "AuthParameters": {
+                    "USERNAME": self.username,
+                    "PASSWORD": self.password,
+                },
+            }
 
         response = await self._send_request(
             url=token_url,
@@ -445,6 +485,12 @@ class VeoliaAPI:
             raise VeoliaAPITokenError(
                 "Token API call error: " + token_data.get("message", "Unknown error"),
             )
+
+        if challenge := token_data.get("ChallengeName"):
+            # A 200 carrying a challenge instead of tokens is not a failure of
+            # the credentials: it is adaptive authentication asking for a
+            # second factor, which is reported for what it is.
+            raise VeoliaAPIChallengeError(challenge)
 
         authentication_result = token_data.get("AuthenticationResult")
         if not authentication_result:

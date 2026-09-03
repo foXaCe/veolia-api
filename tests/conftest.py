@@ -170,6 +170,12 @@ def api(mock_session):
 
 
 @pytest.fixture
+def token_api(mock_session):
+    """A client authenticating with a Cognito refresh token, no credentials."""
+    return VeoliaAPI("", "", session=mock_session, refresh_token="refresh-me")
+
+
+@pytest.fixture
 def logged_in_api(api):
     """A client with account data pre-populated (skips the login flow)."""
     api.account_data.access_token = "test-token"

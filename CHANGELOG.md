@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `VeoliaAPI` accepts a `refresh_token` argument, authenticating through
+  Cognito's `REFRESH_TOKEN_AUTH` instead of a username and password. Portals
+  behind adaptive authentication challenge password sign-ins from an
+  unrecognised context, and on migrated accounts that challenge cannot be
+  answered: the pool's `phone_number` is an unverified placeholder, so the
+  SMS never arrives. `REFRESH_TOKEN_AUTH` is not a sign-in flow and is never
+  risk-scored, so a token obtained from a trusted context authenticates from
+  any address. The credentials may be empty in that mode, and the e-mail
+  format check is skipped.
+- `VeoliaAPIChallengeError`, raised when Cognito answers a sign-in with a
+  challenge instead of tokens. It used to surface as a bare "Authentication
+  failed", which told the caller nothing about what to do next; the exception
+  carries the `challenge_name`.
+
 ## [2.4.4] - 2026-07-13
 
 ### Fixed

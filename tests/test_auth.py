@@ -10,7 +10,11 @@ import aiohttp
 import pytest
 
 from tests.conftest import COGNITO_OK, ESPACE_CLIENT_OK, FACTURATION_OK
-from veolia_api.exceptions import VeoliaAPIInvalidCredentialsError, VeoliaAPITokenError
+from veolia_api.exceptions import (
+    VeoliaAPIChallengeError,
+    VeoliaAPIInvalidCredentialsError,
+    VeoliaAPITokenError,
+)
 
 COGNITO_URL = r"cognito-idp\.eu-west-3\.amazonaws\.com"
 ESPACE_CLIENT_URL = r"/espace-client"
@@ -188,3 +192,107 @@ async def test_concurrent_check_token_single_login(logged_in_api, mock_session):
     assert len(mock_session.calls_matching("cognito-idp")) == 1
     assert logged_in_api.account_data.access_token == "test-token"
     assert logged_in_api.account_data.token_expiration > datetime.now(UTC).timestamp()
+
+
+def cognito_payload(mock_session):
+    """The JSON body of the single Cognito call recorded so far."""
+    (call,) = mock_session.calls_matching("cognito-idp")
+    return call[2]["json"]
+
+
+async def test_login_with_refresh_token_uses_the_refresh_flow(
+    token_api,
+    mock_session,
+):
+    add_login_mocks(mock_session)
+
+    assert await token_api.login() is True
+
+    payload = cognito_payload(mock_session)
+    assert payload["AuthFlow"] == "REFRESH_TOKEN_AUTH"
+    assert payload["AuthParameters"] == {"REFRESH_TOKEN": "refresh-me"}
+    assert token_api.account_data.access_token == "test-token"
+    assert token_api.account_data.id_abonnement == "123"
+
+
+async def test_login_with_refresh_token_skips_credential_validation(
+    token_api,
+    mock_session,
+):
+    """An empty username is not an error when a refresh token authenticates."""
+    add_login_mocks(mock_session)
+
+    assert await token_api.login() is True
+
+
+async def test_password_login_still_uses_the_password_flow(api, mock_session):
+    add_login_mocks(mock_session)
+
+    await api.login()
+
+    payload = cognito_payload(mock_session)
+    assert payload["AuthFlow"] == "USER_PASSWORD_AUTH"
+    assert payload["AuthParameters"]["USERNAME"] == "alice@example.test"
+
+
+async def test_refresh_flow_drops_the_stale_bearer_header(token_api, mock_session):
+    """Cognito is asked for a new token without being shown the expired one."""
+    token_api.account_data.access_token = "expired-token"
+    mock_session.add("POST", COGNITO_URL, payload=COGNITO_OK)
+
+    await token_api._get_access_token()
+
+    (call,) = mock_session.calls_matching("cognito-idp")
+    assert "Authorization" not in call[2]["headers"]
+    assert token_api.account_data.access_token == "test-token"
+
+
+async def test_expired_token_renews_through_the_refresh_flow(
+    token_api,
+    mock_session,
+):
+    """A discovered account renews its token without a full login."""
+    token_api.account_data.id_abonnement = "123"
+    token_api.account_data.numero_pds = "PDS1"
+    token_api.account_data.date_debut_abonnement = "2020-01-15"
+    token_api.account_data.access_token = "expired-token"
+    token_api.account_data.token_expiration = datetime.now(UTC).timestamp() - 10
+    mock_session.add("POST", COGNITO_URL, payload=COGNITO_OK)
+
+    await token_api._check_token()
+
+    assert len(mock_session.requests) == 1
+    assert cognito_payload(mock_session)["AuthFlow"] == "REFRESH_TOKEN_AUTH"
+
+
+async def test_rejected_refresh_token_raises_invalid_credentials(
+    token_api,
+    mock_session,
+):
+    mock_session.add(
+        "POST",
+        COGNITO_URL,
+        status=400,
+        payload={
+            "__type": "NotAuthorizedException",
+            "message": "Refresh Token has expired.",
+        },
+    )
+
+    with pytest.raises(VeoliaAPIInvalidCredentialsError):
+        await token_api.login()
+
+
+async def test_cognito_challenge_raises_challenge_error(api, mock_session):
+    """A 200 carrying a challenge is not a plain authentication failure."""
+    mock_session.add(
+        "POST",
+        COGNITO_URL,
+        status=200,
+        payload={"ChallengeName": "SMS_MFA", "Session": "s-1"},
+    )
+
+    with pytest.raises(VeoliaAPIChallengeError) as excinfo:
+        await api.login()
+
+    assert excinfo.value.challenge_name == "SMS_MFA"
