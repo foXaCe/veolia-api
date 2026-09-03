@@ -120,7 +120,8 @@ class VeoliaAPI:
                 ``REFRESH_TOKEN_AUTH`` instead of the username and password.
                 The way in for a portal whose adaptive authentication answers
                 password sign-ins with an unanswerable challenge — see
-                ``VeoliaAPIChallengeError``.
+                ``VeoliaAPIChallengeError``. A bootstrap tool, not a lasting
+                mode: see ``_get_access_token`` for why.
 
         """
         self.username = username
@@ -433,6 +434,15 @@ class VeoliaAPI:
         ``REFRESH_TOKEN_AUTH`` is not a sign-in flow, so Cognito never
         risk-scores it and never answers it with a challenge: a token obtained
         once from a context it already trusts authenticates from any address.
+
+        The refresh token carries its own validity, set on the app client and
+        measured at one hour on the Toulouse Métropole pool, and this flow
+        returns no new one — there is no rotation. So it is a way to reach an
+        account whose password sign-in is challenged, not a lasting
+        alternative to the password: a client built on a refresh token stops
+        authenticating when that token expires. What makes the detour worth it
+        is that Cognito's risk score warms up as an address keeps presenting
+        valid tokens, after which the password is accepted again.
         """
         token_url = f"{LOGIN_URL}"
         _LOGGER.debug("Requesting access token...")

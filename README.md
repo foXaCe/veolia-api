@@ -135,6 +135,13 @@ curl -s https://cognito-idp.eu-west-3.amazonaws.com/ \
 A refresh token is a credential in its own right: store it as you would the
 password, and keep it out of logs and diagnostics.
 
+It is also short-lived: its validity is set on the Cognito app client, measured
+at one hour on the Toulouse Métropole pool, and `REFRESH_TOKEN_AUTH` returns no
+new one — there is no rotation. Treat it as a way to reach an account whose
+password sign-in is challenged, not as a lasting alternative to the password.
+Cognito's risk score warms up as an address keeps presenting valid tokens, so
+the password sign-in is usually accepted again afterwards.
+
 Maintainers can regenerate the portal table from Veolia's national bundle:
 
 ```bash
