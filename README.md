@@ -103,6 +103,38 @@ To add a portal, add an entry to `VEOLIA_PORTALS` in
 the portal's JavaScript bundle as `ClientId:"..."`) and, if different from the
 default, its `backend_url`.
 
+### Refresh-token authentication
+
+Some portals put password sign-ins behind Cognito's adaptive authentication:
+whenever it does not recognise the caller's context, Cognito answers a challenge
+(`SMS_MFA` in practice) instead of tokens. On accounts migrated to such a portal
+the pool's `phone_number` is an unverified placeholder, so the code never arrives
+and the challenge can never be answered. The client reports that case as
+`VeoliaAPIChallengeError` rather than a generic authentication failure.
+
+`REFRESH_TOKEN_AUTH` is not a sign-in flow, so Cognito never risk-scores it: a
+refresh token obtained once from a context it already trusts authenticates from
+any address. Pass it instead of the credentials, which may then be empty:
+
+```python
+client_api = VeoliaAPI("", "", session, refresh_token="ey...")
+```
+
+Obtain the token from a machine the portal is used from, with an
+`InitiateAuth` call carrying the portal's `client_id`:
+
+```bash
+curl -s https://cognito-idp.eu-west-3.amazonaws.com/ \
+  -H 'Content-Type: application/x-amz-json-1.1' \
+  -H 'X-Amz-Target: AWSCognitoIdentityProviderService.InitiateAuth' \
+  -d '{"ClientId":"<client_id>","AuthFlow":"USER_PASSWORD_AUTH",
+       "AuthParameters":{"USERNAME":"your@email.com","PASSWORD":"..."}}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["AuthenticationResult"]["RefreshToken"])'
+```
+
+A refresh token is a credential in its own right: store it as you would the
+password, and keep it out of logs and diagnostics.
+
 Maintainers can regenerate the portal table from Veolia's national bundle:
 
 ```bash

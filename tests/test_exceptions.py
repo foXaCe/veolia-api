@@ -9,6 +9,7 @@ from veolia_api import exceptions
 _SUBCLASSES = [
     "VeoliaAPIInvalidCredentialsError",
     "VeoliaAPITokenError",
+    "VeoliaAPIChallengeError",
     "VeoliaAPIConnectionError",
     "VeoliaAPIResponseError",
     "VeoliaAPIGetDataError",
@@ -30,3 +31,10 @@ def test_subclass_derives_from_base(name):
 def test_subclasses_are_raisable():
     with pytest.raises(exceptions.VeoliaAPIError):
         raise exceptions.VeoliaAPIRateLimitError("boom")
+
+
+def test_challenge_error_carries_the_challenge_name():
+    exc = exceptions.VeoliaAPIChallengeError("SMS_MFA")
+
+    assert exc.challenge_name == "SMS_MFA"
+    assert "SMS_MFA" in str(exc)
