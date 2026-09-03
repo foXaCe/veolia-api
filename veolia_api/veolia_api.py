@@ -29,6 +29,7 @@ from .constants import (
     ConsumptionType,
 )
 from .exceptions import (
+    VeoliaAPIChallengeError,
     VeoliaAPIConnectionError,
     VeoliaAPIGetDataError,
     VeoliaAPIInvalidCredentialsError,
@@ -101,6 +102,7 @@ class VeoliaAPI:
         password: str,
         session: aiohttp.ClientSession | None = None,
         portal_url: str | None = None,
+        refresh_token: str | None = None,
     ) -> None:
         """Initialize the Veolia API client.
 
@@ -110,10 +112,15 @@ class VeoliaAPI:
             session: optional shared aiohttp session.
             portal_url: hostname of the Veolia portal to use (see
                 ``VEOLIA_PORTALS``). Defaults to the national portal.
+            refresh_token: authenticate with this Cognito refresh token
+                instead of the username and password. Meant to reach an
+                account whose portal challenges password sign-ins with a
+                code it cannot deliver -- see :meth:`_refresh_access_token`.
 
         """
         self.username = username
         self.password = password
+        self._refresh_token = refresh_token
         portal = get_portal(portal_url)
         self._client_id = portal.client_id
         self._backend_url = portal.backend_url
@@ -336,14 +343,20 @@ class VeoliaAPI:
     async def login(self) -> bool:
         """Login to the Veolia API."""
         _LOGGER.info("Logging in...")
-        email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
 
-        if not self.username or not self.password:
-            raise VeoliaAPIInvalidCredentialsError("Missing username or password")
-        if not re.match(email_regex, self.username):
-            raise VeoliaAPIInvalidCredentialsError("Invalid email format")
-        _LOGGER.debug("Starting login process...")
-        await self._get_access_token()
+        if self._refresh_token:
+            _LOGGER.debug("Starting login process with a refresh token...")
+            await self._refresh_access_token()
+        else:
+            email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+
+            if not self.username or not self.password:
+                raise VeoliaAPIInvalidCredentialsError("Missing username or password")
+            if not re.match(email_regex, self.username):
+                raise VeoliaAPIInvalidCredentialsError("Invalid email format")
+            _LOGGER.debug("Starting login process...")
+            await self._get_access_token()
+
         await self._get_client_data()
 
         # Check if login was successful
@@ -407,14 +420,46 @@ class VeoliaAPI:
             await self.login()
 
     async def _get_access_token(self) -> None:
-        """Request the access token."""
-        token_url = f"{LOGIN_URL}"
+        """Request the access token with the username and password."""
         _LOGGER.debug("Requesting access token...")
-        json_payload = {
-            "ClientId": self._client_id,
-            "AuthFlow": "USER_PASSWORD_AUTH",
-            "AuthParameters": {"USERNAME": self.username, "PASSWORD": self.password},
-        }
+        await self._cognito_auth(
+            {
+                "ClientId": self._client_id,
+                "AuthFlow": "USER_PASSWORD_AUTH",
+                "AuthParameters": {
+                    "USERNAME": self.username,
+                    "PASSWORD": self.password,
+                },
+            },
+        )
+
+    async def _refresh_access_token(self) -> None:
+        """Exchange the refresh token for a fresh access token.
+
+        ``REFRESH_TOKEN_AUTH`` is not a sign-in flow, so adaptive
+        authentication never challenges it: a token obtained once from a
+        context Cognito already trusts authenticates from any address.
+
+        Note that the refresh token carries its own validity, set on the app
+        client and as short as one hour on some portals, and that Cognito
+        returns no new one here. This is a way to reach an account whose
+        password sign-in is challenged, not a lasting alternative to it.
+        """
+        _LOGGER.debug("Renewing access token with the refresh token...")
+        # _send_request sends an Authorization header as soon as an access
+        # token is set: presenting the expired one to Cognito makes no sense.
+        self.account_data.access_token = None
+        await self._cognito_auth(
+            {
+                "ClientId": self._client_id,
+                "AuthFlow": "REFRESH_TOKEN_AUTH",
+                "AuthParameters": {"REFRESH_TOKEN": self._refresh_token},
+            },
+        )
+
+    async def _cognito_auth(self, json_payload: dict[str, Any]) -> None:
+        """Run one Cognito call and store the access token it returns."""
+        token_url = f"{LOGIN_URL}"
 
         response = await self._send_request(
             url=token_url,
@@ -445,6 +490,11 @@ class VeoliaAPI:
             raise VeoliaAPITokenError(
                 "Token API call error: " + token_data.get("message", "Unknown error"),
             )
+
+        if challenge_name := token_data.get("ChallengeName"):
+            # A challenge is a 200 without tokens, which is otherwise
+            # indistinguishable from a plain failure.
+            raise VeoliaAPIChallengeError(challenge_name)
 
         authentication_result = token_data.get("AuthenticationResult")
         if not authentication_result:

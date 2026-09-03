@@ -35,3 +35,4 @@ env/
 
 # Local / scratch
 /debug_api.py
+.venv/

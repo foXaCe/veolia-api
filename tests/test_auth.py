@@ -10,7 +10,12 @@ import aiohttp
 import pytest
 
 from tests.conftest import COGNITO_OK, ESPACE_CLIENT_OK, FACTURATION_OK
-from veolia_api.exceptions import VeoliaAPIInvalidCredentialsError, VeoliaAPITokenError
+from veolia_api import VeoliaAPI
+from veolia_api.exceptions import (
+    VeoliaAPIChallengeError,
+    VeoliaAPIInvalidCredentialsError,
+    VeoliaAPITokenError,
+)
 
 COGNITO_URL = r"cognito-idp\.eu-west-3\.amazonaws\.com"
 ESPACE_CLIENT_URL = r"/espace-client"
@@ -188,3 +193,91 @@ async def test_concurrent_check_token_single_login(logged_in_api, mock_session):
     assert len(mock_session.calls_matching("cognito-idp")) == 1
     assert logged_in_api.account_data.access_token == "test-token"
     assert logged_in_api.account_data.token_expiration > datetime.now(UTC).timestamp()
+
+
+# --------------------------------------------------------------------------
+# Cognito challenges and refresh-token sign-in
+# --------------------------------------------------------------------------
+
+CHALLENGE_SMS = {
+    "ChallengeName": "SMS_MFA",
+    "Session": "session-value",
+    "ChallengeParameters": {"CODE_DELIVERY_DESTINATION": "+33******89"},
+}
+REFRESH_OK = {"AuthenticationResult": {"AccessToken": "refreshed-token", "ExpiresIn": 3600}}
+
+
+async def test_challenge_raises_its_own_error(api, mock_session):
+    """A challenge is a 200 without tokens, and must not read as a failure."""
+    mock_session.add("POST", COGNITO_URL, payload=CHALLENGE_SMS)
+
+    with pytest.raises(VeoliaAPIChallengeError) as excinfo:
+        await api.login()
+
+    assert excinfo.value.challenge_name == "SMS_MFA"
+    assert "SMS_MFA" in str(excinfo.value)
+
+
+async def test_challenge_is_not_a_token_error(api, mock_session):
+    """Callers that only catch VeoliaAPITokenError must not swallow it."""
+    mock_session.add("POST", COGNITO_URL, payload=CHALLENGE_SMS)
+
+    with pytest.raises(VeoliaAPIChallengeError) as excinfo:
+        await api.login()
+
+    assert not isinstance(excinfo.value, VeoliaAPITokenError)
+
+
+async def test_refresh_token_login_populates_account_data(mock_session):
+    """A refresh token authenticates without username or password."""
+    mock_session.add("POST", COGNITO_URL, payload=REFRESH_OK)
+    mock_session.add("GET", ESPACE_CLIENT_URL, payload=ESPACE_CLIENT_OK)
+    mock_session.add("GET", FACTURATION_URL, payload=FACTURATION_OK)
+    api = VeoliaAPI("", "", session=mock_session, refresh_token="a-refresh-token")
+
+    assert await api.login() is True
+    assert api.account_data.access_token == "refreshed-token"
+    assert api.account_data.id_abonnement == "123"
+
+
+async def test_refresh_token_sends_the_refresh_flow(mock_session):
+    """The Cognito payload must ask for REFRESH_TOKEN_AUTH, not a password."""
+    mock_session.add("POST", COGNITO_URL, payload=REFRESH_OK)
+    mock_session.add("GET", ESPACE_CLIENT_URL, payload=ESPACE_CLIENT_OK)
+    mock_session.add("GET", FACTURATION_URL, payload=FACTURATION_OK)
+    api = VeoliaAPI("", "", session=mock_session, refresh_token="a-refresh-token")
+
+    await api.login()
+
+    _method, _url, kwargs = mock_session.requests[0]
+    body = kwargs.get("json") or {}
+    assert body["AuthFlow"] == "REFRESH_TOKEN_AUTH"
+    assert body["AuthParameters"]["REFRESH_TOKEN"] == "a-refresh-token"
+    assert "PASSWORD" not in body["AuthParameters"]
+
+
+async def test_refresh_token_skips_credential_validation(mock_session):
+    """An empty username must not raise: the refresh path never reads it."""
+    mock_session.add("POST", COGNITO_URL, payload=REFRESH_OK)
+    mock_session.add("GET", ESPACE_CLIENT_URL, payload=ESPACE_CLIENT_OK)
+    mock_session.add("GET", FACTURATION_URL, payload=FACTURATION_OK)
+    api = VeoliaAPI("", "", session=mock_session, refresh_token="a-refresh-token")
+
+    await api.login()  # would raise VeoliaAPIInvalidCredentialsError without the token
+
+
+async def test_expired_refresh_token_raises_token_error(mock_session):
+    """Cognito rejects a dead refresh token with a 400 and NotAuthorized."""
+    mock_session.add(
+        "POST",
+        COGNITO_URL,
+        status=400,
+        payload={
+            "__type": "NotAuthorizedException",
+            "message": "Refresh Token has expired",
+        },
+    )
+    api = VeoliaAPI("", "", session=mock_session, refresh_token="stale")
+
+    with pytest.raises(VeoliaAPIInvalidCredentialsError, match="expired"):
+        await api.login()
