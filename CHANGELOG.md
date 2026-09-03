@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-09-03
+
+### Documentation
+
+- State what a refresh token is worth: its validity is set on the Cognito app
+  client, measured at one hour on the Toulouse Métropole pool, and
+  `REFRESH_TOKEN_AUTH` returns no new one. It reaches an account whose password
+  sign-in is challenged; it does not replace the password lastingly. Measured
+  and reported by alafon.
+
 ## [2.5.0] - 2026-09-03
 
 ### Added
@@ -196,7 +206,8 @@ Releases prior to the `veolia-api-foxace` fork are tracked in the git tags of
 this repository and in the upstream project
 [`Jezza34000/veolia-api`](https://github.com/Jezza34000/veolia-api).
 
-[Unreleased]: https://github.com/foXaCe/veolia-api/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/foXaCe/veolia-api/compare/v2.5.1...HEAD
+[2.5.1]: https://github.com/foXaCe/veolia-api/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/foXaCe/veolia-api/compare/v2.4.4...v2.5.0
 [2.4.4]: https://github.com/foXaCe/veolia-api/compare/v2.4.3...v2.4.4
 [2.4.3]: https://github.com/foXaCe/veolia-api/compare/v2.4.2...v2.4.3
