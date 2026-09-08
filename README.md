@@ -87,6 +87,7 @@ client_api = VeoliaAPI("your@email.com", "password", session, portal_url="www.ea
 | --------------------------------- | --------------------------------------- | -------- |
 | `eau.veolia.fr` (default)         | Veolia France (national)                | default  |
 | `eaudetm.monespace.eau.veolia.fr` | Eau de Toulouse Métropole               | default  |
+| `atlantic-eau.monespace.eau.veolia.fr` | Atlantic'eau (Loire-Atlantique)   | default  |
 | `www.ea-pm.fr`                    | Eau de Perpignan Méditerranée Métropole | dedicated |
 
 You can resolve a commune name to its portal at setup time:

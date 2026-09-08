@@ -31,6 +31,13 @@ def test_get_portal_delegated_branding_uses_default_backend():
     assert portal.client_id != VEOLIA_PORTALS["eau.veolia.fr"].client_id
 
 
+def test_get_portal_atlantic_eau_uses_default_backend():
+    # Atlantic'eau: delegated branding (own client_id) on the shared backend.
+    portal = get_portal("atlantic-eau.monespace.eau.veolia.fr")
+    assert portal.backend_url == DEFAULT_BACKEND_URL
+    assert portal.client_id != VEOLIA_PORTALS["eau.veolia.fr"].client_id
+
+
 def test_get_portal_unknown_raises():
     with pytest.raises(ValueError, match="Unknown Veolia portal"):
         get_portal("nope.example")
