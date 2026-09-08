@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support for the Atlantic'eau portal
+  (`atlantic-eau.monespace.eau.veolia.fr`), the delegated Veolia branding for
+  the Loire-Atlantique water syndicate. Like Eau de Toulouse Métropole it is a
+  delegated branding on the shared backend; its Cognito `client_id` is taken
+  from the national portal's bundle registry
+  (`scripts/regenerate_portals.py`).
+
 ## [2.5.1] - 2026-09-03
 
 ### Documentation

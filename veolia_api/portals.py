@@ -45,6 +45,9 @@ VEOLIA_PORTALS: dict[str, VeoliaPortal] = {
     "eaudetm.monespace.eau.veolia.fr": VeoliaPortal(
         client_id="19bjc8ldefie683n889iiubjc8",  # Eau de Toulouse Métropole
     ),
+    "atlantic-eau.monespace.eau.veolia.fr": VeoliaPortal(
+        client_id="91a3v5b3pef8cjbb3s0pdrnm2",  # Atlantic'eau (Loire-Atlantique)
+    ),
     "www.ea-pm.fr": VeoliaPortal(
         client_id="54e8dri103e65defj6p67eolli",  # Eau de Perpignan Méditerranée Métropole
         backend_url="https://prd-ael-sirius-pmm-backend.istefr.fr",
