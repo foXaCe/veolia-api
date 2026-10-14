@@ -1,4 +1,5 @@
 {
+  "rollbackPrs": false,
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "digest": {
     "enabled": false
@@ -20,6 +21,12 @@
       "matchDepTypes": [
         "action"
       ]
+    },
+    {
+      "description": "Tout ce qui monte se fusionne seul quand la CI est verte (opérateur, 2026-10-14)",
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": true,
+      "platformAutomerge": true
     }
   ],
   "respectLatest": true,
