@@ -8,10 +8,17 @@
     ":disableDependencyDashboard"
   ],
   "ignoreUnstable": true,
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "vulnerabilityAlerts": {
-    "labels": ["security", "dependencies"],
-    "schedule": ["at any time"]
+    "labels": [
+      "security",
+      "dependencies"
+    ],
+    "schedule": [
+      "at any time"
+    ]
   },
   "packageRules": [
     {
@@ -20,9 +27,19 @@
       "matchDepTypes": [
         "action"
       ]
+    },
+    {
+      "description": "Tout ce qui monte se fusionne seul quand la CI est verte (op\u00e9rateur, 2026-10-14)",
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "automerge": true,
+      "platformAutomerge": true
     }
   ],
   "respectLatest": true,
   "separateMajorMinor": false,
-  "separateMinorPatch": false
+  "separateMinorPatch": false,
+  "rollbackPrs": false
 }
